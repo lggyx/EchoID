@@ -5,7 +5,7 @@
 | 项目 | 内容 |
 |---|---|
 | 产品名 | EchoID(Echo + Identity) |
-| 文档版本 | v0.1(初稿) |
+| 文档版本 | v0.2(加入 Mermaid 图示) |
 | 日期 | 2026-07-03 |
 | 状态 | 需求已确认,待评审 |
 | 形态 | Web 网页应用(移动端优先) |
@@ -79,6 +79,46 @@
 | **沟通风格** | 语气词频率、F0 热情度、语速 | 亲和健谈 ↔ 简洁克制 |
 | **思维深度** | 词汇丰富度、句子复杂度、思考型停顿、信息密度 | 层层递进 ↔ 直给简明 |
 
+下图为"声学特征 → 六维度"的映射关系,标 `主` 的边表示该维度的主导特征(权重最高):
+
+```mermaid
+flowchart LR
+    subgraph FEAT["声学特征"]
+        SR["语速 / 语速变异度"]
+        PAUSE["停顿频率 / 时长"]
+        F0["基频起伏 F0"]
+        RMS["音量均值 / 动态"]
+        SLOPE["句末语调"]
+        FILLER["语气词频率"]
+        LEX["词汇丰富度 / 句长"]
+    end
+    subgraph DIM["六维度"]
+        D1["思维节奏"]
+        D2["情绪外显度"]
+        D3["气场"]
+        D4["决策模式"]
+        D5["沟通风格"]
+        D6["思维深度"]
+    end
+    SR -->|主| D1
+    PAUSE --> D1
+    F0 -->|主| D2
+    RMS --> D2
+    SLOPE --> D2
+    RMS -->|主| D3
+    SR --> D3
+    SLOPE --> D3
+    F0 --> D3
+    FILLER -->|"主 · 反向"| D4
+    SLOPE --> D4
+    SR --> D4
+    FILLER -->|主| D5
+    F0 --> D5
+    SR --> D5
+    LEX -->|主| D6
+    PAUSE --> D6
+```
+
 > **冷启动基线**:v1 无用户数据,采用公开语音学经验区间设定初始基线;上线后按真实分布持续校准(埋点收集匿名特征分布)。
 
 ### 3.3 角色库设计
@@ -106,16 +146,19 @@
 
 ## 4. 端到端用户流程
 
-```
-落地页(说明玩法+隐私)
-   → 授权麦克风
-   → 录音页(话题卡 + 声波动画 + 倒计时 20–30s)
-   → 上传 & 分析(悬念揭晓动画:"正在听你说话…正在为你绘制专属画像…")
-   → 部分揭晓:只显示【角色名】,制造好奇
-   → 分享解锁(信任制:点分享即解锁)
-   → 完整卡片:gpt-image-2 意象图(主体) + 下滑六维雷达图 + 可展开真实数据
-   → 生成含二维码的卡片图 → 保存 / 转发
-   → 好友扫码 → 落地页 → 再测
+```mermaid
+flowchart TD
+    A["落地页<br/>说明玩法 + 隐私承诺"] --> B["授权麦克风"]
+    B --> C["录音页<br/>话题卡 + 声波动画 + 倒计时"]
+    C -->|"重录 / 换话题"| C
+    C --> D["上传音频 → 后端分析"]
+    D --> E["悬念揭晓动画<br/>正在听你说话 · 绘制专属画像"]
+    E --> F["部分揭晓<br/>只显示角色名 · 制造好奇"]
+    F --> G{"想看完整六维?"}
+    G -->|"分享 / 保存海报(信任制解锁)"| H["完整卡片<br/>意象图 + 六维雷达 + 可展开数据"]
+    H --> I["生成含二维码的卡片图<br/>保存 / 转发"]
+    I -.->|"微信扫码"| J["分享落地页 /s/ 卡片ID"]
+    J -->|"我也测一个"| A
 ```
 
 ### 4.1 各环节 UX 要点
@@ -187,21 +230,69 @@
 
 ### 6.2 管线架构
 
+```mermaid
+flowchart TB
+    subgraph FE["前端(浏览器)"]
+        REC["录音 MediaRecorder<br/>+ 声波 AnalyserNode"]
+    end
+    subgraph API["Next.js API /api/analyze"]
+        DEC["解码 / 重采样(ffmpeg)"]
+        ASR["ASR 抽象层<br/>转写 + 词级时间戳"]
+        FEAT["声学特征提取<br/>F0 / RMS / 停顿 / 句末语调"]
+        SCORE["六维打分(规则引擎)"]
+        MATCH["角色匹配(向量距离)"]
+        LLM["LLM 抽象层<br/>文案 + image_prompt"]
+        IMG["图像抽象层 gpt-image-2<br/>意象图"]
+        ASM["组装结果"]
+    end
+    subgraph STORE["存储"]
+        OBJ["对象存储<br/>意象图 / 卡片(持久)"]
+        TMP["临时音频<br/>TTL ≤ 24h → 删"]
+    end
+    REC -->|"multipart audio"| DEC
+    DEC --> ASR
+    DEC --> FEAT
+    DEC -.-> TMP
+    ASR --> SCORE
+    FEAT --> SCORE
+    SCORE --> MATCH
+    MATCH --> LLM
+    LLM --> IMG
+    LLM --> ASM
+    IMG --> OBJ
+    IMG --> ASM
+    ASM --> OUT["前端:揭晓动画 → 卡片 → 分享图(含二维码)"]
 ```
-[前端] 录音(MediaRecorder) + 声波(AnalyserNode)
-   │  multipart audio
-   ▼
-[Next.js API /api/analyze]
-   ├─ 解码/重采样(ffmpeg)
-   ├─ ASR(抽象层) ──► 转写 + 词级时间戳
-   ├─ 声学特征提取 ──► F0 / RMS / 停顿 / 句末语调
-   ├─ 特征 → 六维打分(规则引擎)
-   ├─ 角色匹配(向量距离)
-   ├─ LLM(抽象层) ──► 文案 + image_prompt(结构化 JSON)
-   ├─ 图像(抽象层 gpt-image-2) ──► 意象图 → 对象存储
-   └─ 组装结果;原始音频置 TTL(短期后删)
-   ▼
-[前端] 揭晓动画 → 卡片 → 分享图(含二维码)
+
+一次分析请求的调用顺序与并行关系(ASR 与声学特征提取并行,缩短总时延):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 浏览器
+    participant API as API
+    participant ASR as ASR
+    participant DSP as 特征提取
+    participant LLM as LLM
+    participant IMG as 生图
+    participant S as 存储
+    U->>API: POST /api/analyze(音频)
+    API->>S: 暂存音频(TTL)
+    par 并行处理
+        API->>ASR: 转写请求
+        ASR-->>API: 文本 + 词级时间戳
+    and
+        API->>DSP: 提取 F0 / RMS / 停顿
+        DSP-->>API: 声学特征值
+    end
+    API->>API: 六维打分 + 角色匹配
+    API->>LLM: 特征 + 转写
+    LLM-->>API: 文案 + image_prompt(JSON)
+    API->>IMG: image_prompt
+    IMG-->>API: 意象图 URL
+    API->>S: 持久化结果 / 卡片 + 触发音频删除
+    API-->>U: 返回角色名(部分揭晓)
+    Note over U: 分享解锁 → 拉取完整六维卡片
 ```
 
 ### 6.3 声学特征提取方案(关键技术决策)
@@ -242,6 +333,55 @@ interface ImageProvider { generate(prompt): Promise<{ url }> }  // 默认 gpt-im
 | Card | id(=shareId), result_id, image_url, qr_url, is_public, created_at |
 | ShareEvent | card_id, unlocked_at, referrer |
 
+实体关系如下:
+
+```mermaid
+erDiagram
+    User |o--o{ Session : "可选登录关联"
+    Session ||--o{ Recording : "发起"
+    Recording ||--|| AnalysisResult : "产出"
+    AnalysisResult ||--|| Card : "生成"
+    Card ||--o{ ShareEvent : "分享 / 解锁"
+    User {
+        string id PK
+        string email "可选,登录用"
+        datetime created_at
+    }
+    Session {
+        string anon_id PK
+        string user_id FK "可选"
+    }
+    Recording {
+        string id PK
+        string owner FK
+        int duration
+        string audio_url "临时"
+        datetime expires_at
+        string status
+    }
+    AnalysisResult {
+        string id PK
+        string recording_id FK
+        json features_json
+        json dimensions_json
+        string matched_role_id
+        string headline
+        string image_url
+    }
+    Card {
+        string id PK "= shareId"
+        string result_id FK
+        string image_url
+        string qr_url
+        bool is_public
+    }
+    ShareEvent {
+        string card_id FK
+        datetime unlocked_at
+        string referrer
+    }
+```
+
 ---
 
 ## 8. 非功能需求
@@ -259,6 +399,17 @@ interface ImageProvider { generate(prompt): Promise<{ url }> }  // 默认 gpt-im
 - **北极星指标**:分享率(生成卡片并分享/保存的比例)。
 - **关键指标**:完成率(进入→出卡片)、解锁率(部分揭晓→解锁)、扫码回流率、新用户来自分享占比、平均生成时长、意象图成功率。
 - **裂变机制**:部分揭晓吊胃口 → 分享解锁 → 卡片含二维码 → 扫码回流闭环。
+
+裂变闭环与关键指标(边上标注对应转化率):
+
+```mermaid
+flowchart LR
+    START["新用户进入"] --> PLAY["录音体验"]
+    PLAY -->|完成率| REVEAL["部分揭晓<br/>角色名吊胃口"]
+    REVEAL -->|解锁率| SHARE["分享 / 保存<br/>含二维码卡片"]
+    SHARE --> SPREAD["朋友圈 / 社群曝光"]
+    SPREAD -->|扫码回流率| START
+```
 
 ---
 
