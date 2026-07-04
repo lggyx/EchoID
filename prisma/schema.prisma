@@ -1,0 +1,55 @@
+// Prisma schema for EchoID MVP
+// SQLite + local file system storage
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Recording {
+  id         String   @id
+  ownerAnon  String
+  duration   Float
+  audioPath  String
+  status     String   @default("pending")
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  result     AnalysisResult?
+}
+
+model AnalysisResult {
+  id             String   @id
+  recordingId    String   @unique
+  recording      Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  featuresJson   String
+  dimensionsJson String
+  matchedRoleId  String
+  headline       String
+  cardCopy       String
+  imageUrl       String
+  transcript     String?
+  createdAt      DateTime @default(now())
+  card           Card?
+}
+
+model Card {
+  id         String   @id
+  resultId   String   @unique
+  result     AnalysisResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  imageUrl   String
+  qrUrl      String?
+  isPublic   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  shareEvents ShareEvent[]
+}
+
+model ShareEvent {
+  id         String   @id @default(cuid())
+  cardId     String
+  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  unlockedAt DateTime @default(now())
+  referrer   String?
+}

@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #120f17;
+  color: #f5f1ff;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family:
+    "Bricolage Grotesque", "Noto Sans SC", -apple-system, BlinkMacSystemFont,
+    "PingFang SC", system-ui, sans-serif;
+  font-feature-settings: "ss01", "ss02";
+  min-height: 100dvh;
+}
+
+/* Selection uses the accent color for a subtle branded feel. */
+::selection {
+  background: rgba(179, 124, 255, 0.35);
+  color: #ffffff;
+}
+
+/* Custom scrollbar for depth. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(179, 124, 255, 0.25);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(179, 124, 255, 0.45);
+}
+
+/* A repeated dotted grid used behind hero sections. */
+.bg-dots {
+  background-image: radial-gradient(
+    rgba(179, 124, 255, 0.12) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+/* Utility for gradient border cards. */
+.grad-border {
+  position: relative;
+  isolation: isolate;
+}
+.grad-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(179, 124, 255, 0.7),
+    rgba(94, 231, 255, 0.5),
+    rgba(255, 161, 224, 0.4)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}

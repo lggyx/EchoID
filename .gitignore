@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+storage
+*.db
+*.db-journal
+.DS_Store
+tsconfig.tsbuildinfo
+scripts/.bridge.log
+scripts/.asr_bridge.log
