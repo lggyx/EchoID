@@ -107,6 +107,12 @@ IMAGE_PROVIDER=mock
 The `Provider` interfaces in `src/types/core.ts` are the contract; add real
 implementations behind the same interface — no call-site changes needed.
 
+## Roadshow deck
+
+3-min hackathon deck (PPTX, 9 slides) with embedded page screenshots:
+[`docs/deck/EchoID-roadshow.pptx`](docs/deck/EchoID-roadshow.pptx). See
+[`docs/deck/README.md`](docs/deck/README.md) for regeneration.
+
 ## Non-goals (v1)
 
 Per PRD: no personality/MBTI labels, no pronunciation coaching, no content
