@@ -10,3 +10,5 @@ scripts/.bridge.log
 scripts/.asr_bridge.log
 # Docker Compose user overrides (they may contain secrets / host paths)
 docker-compose.override.yml
+# Local audio fixtures for smoke tests
+tmp-audio/

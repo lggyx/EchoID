@@ -12,8 +12,9 @@ import { StaticImageProvider } from "./image-static";
  *  - ASR: `ASR_PROVIDER=mock` for tests, otherwise the faster-whisper sidecar.
  *  - LLM: any OpenAI chat/completions-compatible endpoint works — pick by env
  *    (`LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`). Empty API key = mock.
- *  - Image: static persona portraits by default (`IMAGE_PROVIDER=mock` opts
- *    into generated SVG placeholders for local development).
+ *  - Image: static persona portraits under public/personas/ by default
+ *    (VBTI PRD §5.5 · D2). `IMAGE_PROVIDER=mock` opts into the on-the-fly
+ *    SVG generator, kept for local dev when new personas don't yet have art.
  */
 
 const storageDir = path.resolve(process.cwd(), process.env.STORAGE_DIR ?? "./storage");

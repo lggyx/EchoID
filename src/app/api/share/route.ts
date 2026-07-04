@@ -72,19 +72,19 @@ export async function POST(req: Request) {
   // Validate dimensions decode; we don't render them into the composite yet
   // but bad JSON should surface as a 500 rather than a silent skip.
   let dimensions: Dimension[] = [];
-  try {
-    dimensions = JSON.parse(result.dimensionsJson ?? "[]") as Dimension[];
-  } catch {
-    dimensions = [];
+  if (result.dimensionsJson) {
+    try {
+      dimensions = JSON.parse(result.dimensionsJson) as Dimension[];
+    } catch {
+      dimensions = [];
+    }
   }
 
   const posterDataUrl = await inlineLocalImageAsDataUrl(result.imageUrl);
   const roleTitle =
     ROLE_LIBRARY.find((r) => r.id === result.matchedRoleId)?.title ??
-    result.matchedPersonaId ??
-    result.matchedSubsystem ??
     result.matchedRoleId ??
-    "声音角色";
+    "";
 
   const svg = composeShareSvg({
     posterDataUrl,
