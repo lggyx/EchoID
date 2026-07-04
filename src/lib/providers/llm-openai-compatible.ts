@@ -5,6 +5,7 @@ import type {
   LLMProfileInput,
   LLMProvider,
 } from "@/types/core";
+import { MockLLMProvider } from "./llm-mock";
 
 /**
  * OpenAI chat/completions-compatible LLM provider.
@@ -49,6 +50,7 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly timeoutMs: number;
+  private readonly legacyProfileDelegate = new MockLLMProvider();
 
   constructor(opts: OpenAICompatibleOptions) {
     this.baseURL = opts.baseURL.replace(/\/+$/, "");
@@ -80,19 +82,37 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
     return coerceArousal(parsed);
   }
 
-  async generateProfile(_input: LLMProfileInput): Promise<AnalysisProfile> {
-    // TODO(vbti): once the VBTI AnalysisProfile shape (headline / card_copy /
-    // evidence / persona_id / image_prompt) is agreed with tracks A & B in
-    // src/types/core.ts, wire it here. For now the EchoID mock still produces
-    // profile output; this branch is only exercised by extractArousal().
-    throw new Error(
-      "OpenAICompatibleLLMProvider.generateProfile is not implemented yet — pending VBTI AnalysisProfile schema.",
-    );
+  async generateProfile(input: LLMProfileInput): Promise<AnalysisProfile> {
+    // Legacy EchoID profile shape. VBTI uses the segmented pipeline and does
+    // not need this method for matching/card copy, so keep the legacy path
+    // stable by delegating to the deterministic mock until a VBTI profile
+    // schema replaces the old RoleTemplate/Dimension contract.
+    return this.legacyProfileDelegate.generateProfile(input);
   }
 
   // ---------- internals ----------
 
   private async chat(
+    messages: ChatMessage[],
+    opts: { maxTokens: number; temperature?: number },
+  ): Promise<string> {
+    // Some providers (openai-next / gpt-5-chat under contention) will
+    // occasionally return `finish=length` with empty content when the
+    // effective max_tokens is tight — this doubled request usually clears
+    // it. Phase 0 spike hit this on 1/24 calls; without the retry, the
+    // fallback path masked it and inflated per-clip variance.
+    try {
+      return await this.chatOnce(messages, opts);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (/finish=length/.test(msg) || /empty content/.test(msg)) {
+        return this.chatOnce(messages, { ...opts, maxTokens: opts.maxTokens * 4 });
+      }
+      throw err;
+    }
+  }
+
+  private async chatOnce(
     messages: ChatMessage[],
     opts: { maxTokens: number; temperature?: number },
   ): Promise<string> {
