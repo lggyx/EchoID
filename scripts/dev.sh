@@ -141,6 +141,7 @@ cmd_up() {
   cmd_bridge
   cmd_build_asr || true    # only rebuild if image missing? cheap to skip if cached
   cmd_asr
+  cmd_watchdog_start
   echo "[dev] now run:  ./scripts/dev.sh dev   (interactive Next.js)"
 }
 
@@ -151,6 +152,7 @@ cmd_stop() {
   container rm "${ASR_NAME}" 2>/dev/null || true
   pkill -f "proxy_bridge.py.*--listen-port ${BRIDGE_PORT}" 2>/dev/null || true
   pkill -f "proxy_bridge.py.*--listen-port ${ASR_BRIDGE_PORT}" 2>/dev/null || true
+  pkill -f "asr_watchdog.sh" 2>/dev/null || true
   echo "[dev] stopped"
 }
 
@@ -159,11 +161,14 @@ cmd_status() {
   container list 2>/dev/null | grep -E "NAME|${DEV_NAME}|${ASR_NAME}" || echo "  (none)"
   echo "-- bridges --"
   pgrep -f "proxy_bridge.py.*${BRIDGE_PORT}" >/dev/null \
-    && echo "  proxy  0.0.0.0:${BRIDGE_PORT}    -> 127.0.0.1:${HOST_PROXY_PORT}" \
-    || echo "  proxy  down"
+    && echo "  proxy    0.0.0.0:${BRIDGE_PORT}    -> 127.0.0.1:${HOST_PROXY_PORT}" \
+    || echo "  proxy    down"
   pgrep -f "proxy_bridge.py.*${ASR_BRIDGE_PORT}" >/dev/null \
-    && echo "  asr    0.0.0.0:${ASR_BRIDGE_PORT}    -> 127.0.0.1:${ASR_HOST_PORT}" \
-    || echo "  asr    down"
+    && echo "  asr      0.0.0.0:${ASR_BRIDGE_PORT}    -> 127.0.0.1:${ASR_HOST_PORT}" \
+    || echo "  asr      down"
+  pgrep -f "asr_watchdog.sh" >/dev/null \
+    && echo "  watchdog running (log: scripts/.watchdog.log)" \
+    || echo "  watchdog down"
   echo "-- endpoints --"
   code=$(curl -sS -m 2 -o /dev/null -w "%{http_code}" http://localhost:3000/ 2>/dev/null || echo "n/a")
   echo "  dev  http://localhost:3000  => ${code}"
@@ -171,28 +176,55 @@ cmd_status() {
   echo "  asr  http://localhost:${ASR_HOST_PORT}/healthz => ${code}"
 }
 
+cmd_watchdog() {
+  # Foreground — good for a spare terminal window during a demo.
+  exec "${REPO_DIR}/scripts/asr_watchdog.sh"
+}
+
+cmd_watchdog_start() {
+  # Detached background. Idempotent — kills any prior watcher first.
+  pkill -f "asr_watchdog.sh" 2>/dev/null || true
+  sleep 0.2
+  nohup "${REPO_DIR}/scripts/asr_watchdog.sh" \
+    >"${REPO_DIR}/scripts/.watchdog.log" 2>&1 &
+  disown || true
+  sleep 0.3
+  echo "[dev] asr watchdog started · log: scripts/.watchdog.log"
+}
+
+cmd_watchdog_stop() {
+  pkill -f "asr_watchdog.sh" 2>/dev/null && echo "[dev] watchdog stopped" \
+    || echo "[dev] watchdog was not running"
+}
+
 case "${1:-}" in
-  bridge)     cmd_bridge ;;
-  build)      cmd_build ;;
-  build-asr)  cmd_build_asr ;;
-  asr)        cmd_asr ;;
-  shell)      cmd_shell ;;
-  dev)        cmd_dev ;;
-  up)         cmd_up ;;
-  stop)       cmd_stop ;;
-  status)     cmd_status ;;
+  bridge)          cmd_bridge ;;
+  build)           cmd_build ;;
+  build-asr)       cmd_build_asr ;;
+  asr)             cmd_asr ;;
+  shell)           cmd_shell ;;
+  dev)             cmd_dev ;;
+  up)              cmd_up ;;
+  stop)            cmd_stop ;;
+  status)          cmd_status ;;
+  watchdog)        cmd_watchdog ;;
+  watchdog-start)  cmd_watchdog_start ;;
+  watchdog-stop)   cmd_watchdog_stop ;;
   *)
     /bin/cat <<EOF
-usage: $0 {bridge|build|build-asr|asr|shell|dev|up|stop|status}
-  bridge      start host proxy bridge (0.0.0.0:${BRIDGE_PORT} -> 127.0.0.1:${HOST_PROXY_PORT})
-  build       build ${DEV_IMAGE} (Node app)
-  build-asr   build ${ASR_IMAGE} (faster-whisper + FastAPI)
-  asr         start ASR container detached, publish :8000
-  shell       interactive shell inside dev container
-  dev         run \`npm run dev\` interactive, publish :3000
-  up          bridge + build-asr + asr (then run \`dev\` yourself)
-  stop        stop & remove BOTH containers + bridge
-  status      show container / bridge / endpoint status
+usage: $0 {bridge|build|build-asr|asr|shell|dev|up|stop|status|watchdog|watchdog-start|watchdog-stop}
+  bridge          start host proxy bridge (0.0.0.0:${BRIDGE_PORT} -> 127.0.0.1:${HOST_PROXY_PORT})
+  build           build ${DEV_IMAGE} (Node app)
+  build-asr       build ${ASR_IMAGE} (faster-whisper + FastAPI)
+  asr             start ASR container detached, publish :8000
+  shell           interactive shell inside dev container
+  dev             run \`npm run dev\` interactive, publish :3000
+  up              bridge + build-asr + asr + watchdog (then run \`dev\`)
+  stop            stop & remove BOTH containers + bridges + watchdog
+  status          show container / bridge / watchdog / endpoint status
+  watchdog        ASR sidecar watchdog (foreground · Ctrl-C to exit)
+  watchdog-start  ASR watchdog detached (log: scripts/.watchdog.log)
+  watchdog-stop   stop the detached ASR watchdog
 EOF
     exit 1
     ;;
