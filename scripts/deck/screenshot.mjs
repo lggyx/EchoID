@@ -115,8 +115,18 @@ async function main() {
     // 05 · Share landing
     await shot(page, `${BASE}/s/${CARD_ID}`, "05-share", { fullPage: true });
 
-    // 06 · Persona gallery (dev-only debug page)
-    await shot(page, `${BASE}/debug/roles`, "06-personas", { fullPage: true });
+    // 06 · Persona gallery is not a live UI page in VBTI (the /debug/roles
+    // page still shows the legacy EchoID 12 role SVGs, not the 35 VBTI
+    // personas). Instead, copy the offline contact sheet that ships in the
+    // repo. This is the file the deck actually wants.
+    const contactSheetSrc = new URL("../../docs/vbti-personas-contact-sheet.png", import.meta.url);
+    const contactSheetDst = `${OUT_DIR}/06-personas.png`;
+    try {
+      await fs.copyFile(contactSheetSrc, contactSheetDst);
+      console.log(`  copied contact sheet → ${contactSheetDst}`);
+    } catch (e) {
+      console.warn("  ! contact sheet copy failed:", e.message);
+    }
 
     console.log("done");
   } finally {
