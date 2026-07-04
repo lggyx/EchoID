@@ -107,8 +107,40 @@ export interface LLMProfileInput {
   transcript: string;
 }
 
+/**
+ * Input for the VBTI arousal extractor: a short segment of ASR-transcribed
+ * Chinese speech. `context` is optional metadata the LLM can use to bias its
+ * interpretation (e.g., "this was a break-down rant about a TV show").
+ */
+export interface LLMArousalInput {
+  transcript: string;
+  context?: string;
+}
+
+/**
+ * Semantic-arousal reading of a text segment. `arousal` is on a 0..1 scale
+ * where 0 = utterly flat/detached and 1 = extremely worked up. `reason` is a
+ * short human-readable justification we can surface as evidence.
+ */
+export interface ArousalResult {
+  arousal: number;
+  reason: string;
+}
+
 export interface LLMProvider {
   generateProfile(input: LLMProfileInput): Promise<AnalysisProfile>;
+  /**
+   * Extract semantic emotional arousal (激动度) from a Chinese text segment.
+   * Used by VBTI to compute the contrast between what the user *said* and how
+   * they *sounded* (voice arousal from DSP).
+   *
+   * Implementations SHOULD:
+   *  - return `arousal` clamped to [0, 1]
+   *  - never throw on transient network / schema failures — callers rely on
+   *    the pipeline continuing; wrap in try/catch and fall back to a
+   *    keyword-based estimate.
+   */
+  extractArousal(input: LLMArousalInput): Promise<ArousalResult>;
 }
 
 export interface ImageProvider {

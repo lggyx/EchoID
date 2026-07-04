@@ -1,9 +1,12 @@
 import type {
   AnalysisProfile,
+  ArousalResult,
   Dimension,
+  LLMArousalInput,
   LLMProfileInput,
   LLMProvider,
 } from "@/types/core";
+import { keywordArousal } from "./arousal-fallback";
 
 /**
  * Mock LLM: composes deterministic-but-personalized copy from the already-
@@ -44,6 +47,12 @@ export class MockLLMProvider implements LLMProvider {
       cardCopy,
       imagePrompt,
     };
+  }
+
+  // Reuse the keyword estimator so mock arousal behaves plausibly in tests
+  // (0.14 vs 0.96 style spread) without needing a real network call.
+  async extractArousal(input: LLMArousalInput): Promise<ArousalResult> {
+    return keywordArousal(input);
   }
 }
 
