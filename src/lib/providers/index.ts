@@ -5,15 +5,16 @@ import { FasterWhisperASRProvider } from "./asr-fasterwhisper";
 import { MockLLMProvider } from "./llm-mock";
 import { OpenAICompatibleLLMProvider } from "./llm-openai-compatible";
 import { MockImageProvider } from "./image-mock";
+import { StaticImageProvider } from "./image-static";
 
 /**
  * Provider factory. Selection strategy:
  *  - ASR: `ASR_PROVIDER=mock` for tests, otherwise the faster-whisper sidecar.
  *  - LLM: any OpenAI chat/completions-compatible endpoint works — pick by env
  *    (`LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`). Empty API key = mock.
- *  - Image: mock only for now (offline persona images land under
- *    `public/personas/` and are looked up by matched personaId, not
- *    generated on-request; see PRD-VBTI-v1.1 §5.5).
+ *  - Image: static persona portraits under public/personas/ by default
+ *    (VBTI PRD §5.5 · D2). `IMAGE_PROVIDER=mock` opts into the on-the-fly
+ *    SVG generator, kept for local dev when new personas don't yet have art.
  */
 
 const storageDir = path.resolve(process.cwd(), process.env.STORAGE_DIR ?? "./storage");
@@ -41,8 +42,10 @@ export function getLLMProvider(): LLMProvider {
 export function getImageProvider(): ImageProvider {
   switch (process.env.IMAGE_PROVIDER) {
     case "mock":
-    default:
       return new MockImageProvider(storageDir);
+    case "static":
+    default:
+      return new StaticImageProvider();
   }
 }
 

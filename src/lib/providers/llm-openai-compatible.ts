@@ -5,6 +5,7 @@ import type {
   LLMProfileInput,
   LLMProvider,
 } from "@/types/core";
+import { MockLLMProvider } from "./llm-mock";
 
 /**
  * OpenAI chat/completions-compatible LLM provider.
@@ -49,6 +50,16 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly timeoutMs: number;
+  /**
+   * Delegate for `generateProfile` until the VBTI AnalysisProfile schema
+   * is nailed down. The VBTI card copy needs `headline / card_copy /
+   * evidence / persona_id / image_prompt`, which differs from the legacy
+   * EchoID `matched_role_id + dimensions[]` shape currently in
+   * `types/core.ts`. Until tracks A/B agree on the new type
+   * (PRD §12.4), we route the legacy shape through the mock so the whole
+   * pipeline stays green — swap this out when the VBTI schema lands.
+   */
+  private readonly legacyProfileDelegate = new MockLLMProvider();
 
   constructor(opts: OpenAICompatibleOptions) {
     this.baseURL = opts.baseURL.replace(/\/+$/, "");
@@ -80,14 +91,13 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
     return coerceArousal(parsed);
   }
 
-  async generateProfile(_input: LLMProfileInput): Promise<AnalysisProfile> {
-    // TODO(vbti): once the VBTI AnalysisProfile shape (headline / card_copy /
-    // evidence / persona_id / image_prompt) is agreed with tracks A & B in
-    // src/types/core.ts, wire it here. For now the EchoID mock still produces
-    // profile output; this branch is only exercised by extractArousal().
-    throw new Error(
-      "OpenAICompatibleLLMProvider.generateProfile is not implemented yet — pending VBTI AnalysisProfile schema.",
-    );
+  async generateProfile(input: LLMProfileInput): Promise<AnalysisProfile> {
+    // Legacy EchoID shape. Delegated to the mock until the VBTI
+    // AnalysisProfile schema is committed in types/core.ts by tracks A/B.
+    // The delegate is fully deterministic so the pipeline is stable during
+    // the transition; the real LLM will only start driving profiles once
+    // the new schema (headline / card_copy / evidence / persona_id) lands.
+    return this.legacyProfileDelegate.generateProfile(input);
   }
 
   // ---------- internals ----------
