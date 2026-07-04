@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 900" width="720" height="900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#221C2E"/>
+      <stop offset="100%" stop-color="#120F17"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="45%" r="50%">
+      <stop offset="0%" stop-color="#B37CFF" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#B37CFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="720" height="900" fill="url(#bg)"/>
+  <rect width="720" height="900" fill="url(#halo)"/>
+  <!-- head + shoulders silhouette -->
+  <g fill="#F5F1FF" fill-opacity="0.72">
+    <circle cx="360" cy="360" r="110"/>
+    <path d="M 200 900 C 200 700 250 560 360 560 C 470 560 520 700 520 900 Z"/>
+  </g>
+  <text x="360" y="820" text-anchor="middle" font-family="Georgia, serif" font-style="italic"
+        font-size="22" fill="#F5F1FF" fill-opacity="0.55">portrait pending</text>
+  <text x="360" y="60" text-anchor="middle" font-family="Georgia, serif"
+        letter-spacing="10" font-size="14" fill="#F5F1FF" fill-opacity="0.4">ECHOID</text>
+</svg>

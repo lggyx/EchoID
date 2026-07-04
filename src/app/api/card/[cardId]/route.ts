@@ -5,9 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 import type {
   AcousticFeatures,
   AnalyzeFullResponse,
+  AnalyzeSegmentedFullResponse,
   Dimension,
+  VbtiSubsystem,
 } from "@/types/core";
 import { prisma } from "@/lib/prisma";
+import { SUBSYSTEM_TITLES } from "@/lib/matching/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +31,39 @@ export async function GET(
   }
 
   const { result } = card;
+  if (result.matchedSubsystem) {
+    const matchedSubsystem = result.matchedSubsystem as VbtiSubsystem;
+    const segments = await prisma.recordingSegment.findMany({
+      where: { recordingId: result.recordingId },
+      orderBy: { questionIndex: "asc" },
+    });
+    const payload: AnalyzeSegmentedFullResponse = {
+      recordingId: result.recordingId,
+      resultId: result.id,
+      cardId: card.id,
+      headline: result.headline,
+      imageUrl: card.imageUrl,
+      matchedSubsystem,
+      subsystemTitle: SUBSYSTEM_TITLES[matchedSubsystem],
+      cardCopy: result.cardCopy,
+      contrastRateAvg: result.contrastRateAvg ?? 0,
+      contrastRateStd: result.contrastRateStd ?? 0,
+      dramaDensityAvg: result.dramaDensityAvg ?? 0,
+      z1SpeedStability: result.z1SpeedStability ?? 0,
+      z2VolumeStrength: result.z2VolumeStrength ?? 0,
+      z3MonologueTendency: result.z3MonologueTendency ?? 0,
+      matchedPersonaId: result.matchedPersonaId ?? "",
+      evidenceJson: result.evidenceJson ? safeParse<unknown>(result.evidenceJson) : null,
+      segmentsSummary: segments.map((segment) => ({
+        questionIndex: segment.questionIndex,
+        transcript: segment.transcript,
+        contrastRate: segment.contrastRate ?? 0,
+        dramaDensity: segment.dramaDensity ?? 0,
+      })),
+    };
+    return NextResponse.json(payload);
+  }
+
   const features = safeParse<AcousticFeatures>(result.featuresJson);
   const dimensions = safeParse<Dimension[]>(result.dimensionsJson);
   if (!features || !dimensions) {
@@ -48,7 +84,8 @@ export async function GET(
   return NextResponse.json(payload);
 }
 
-function safeParse<T>(raw: string): T | null {
+function safeParse<T>(raw: string | null | undefined): T | null {
+  if (!raw) return null;
   try {
     return JSON.parse(raw) as T;
   } catch {

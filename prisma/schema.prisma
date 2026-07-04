@@ -1,7 +1,8 @@
-// Prisma schema for EchoID MVP
+// Prisma schema for EchoID / VBTI
 // SQLite + local file system storage
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin-arm64", "linux-arm64-openssl-3.0.x"]
 }
 
 datasource db {
@@ -13,24 +14,54 @@ model Recording {
   id         String   @id
   ownerAnon  String
   duration   Float
-  audioPath  String
+  audioPath  String?
   status     String   @default("pending")
   expiresAt  DateTime
   createdAt  DateTime @default(now())
+  stageDirection String?
+  segments   RecordingSegment[]
   result     AnalysisResult?
+}
+
+model RecordingSegment {
+  id            String   @id
+  recordingId   String
+  recording     Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  questionIndex Int
+  audioPath     String
+  duration      Float
+  transcript    String   @default("")
+  featuresJson  String   @default("{}")
+  semanticArousal Float?
+  acousticArousal Float?
+  contrastRate  Float?
+  dramaDensity  Float?
+  createdAt     DateTime @default(now())
+
+  @@unique([recordingId, questionIndex])
 }
 
 model AnalysisResult {
   id             String   @id
   recordingId    String   @unique
   recording      Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
-  featuresJson   String
-  dimensionsJson String
-  matchedRoleId  String
+  featuresJson   String?
+  dimensionsJson String?
+  matchedRoleId  String?
   headline       String
   cardCopy       String
   imageUrl       String
   transcript     String?
+  contrastRateAvg     Float?
+  contrastRateStd     Float?
+  dramaDensityAvg     Float?
+  z1SpeedStability    Float?
+  z2VolumeStrength    Float?
+  z3MonologueTendency Float?
+  triggeredSignatures String?
+  matchedSubsystem    String?
+  matchedPersonaId    String?
+  evidenceJson        String?
   createdAt      DateTime @default(now())
   card           Card?
 }
