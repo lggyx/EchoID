@@ -1,16 +1,59 @@
 # EchoID 开发容器
 
-两个容器：
-- **echoid-dev**  Next.js 应用（Node 22）→ 宿主 `:3000`
-- **echoid-asr**  faster-whisper ASR 微服务（Python 3.11）→ 宿主 `:8000`
+两个服务：
+- **app**  Next.js 应用（Node 22）→ 宿主 `:3000`
+- **asr**  faster-whisper ASR 微服务（Python 3.11）→ 宿主 `:8000`
 
-都跑在 Apple 官方 `container` CLI 里，通过宿主机代理访问外网。
+支持两种容器化方式:
+
+| 方式 | 平台 | 一句话 |
+|---|---|---|
+| [Docker Compose](#docker-compose) | 跨平台 | 一条 `docker compose up`,推荐 |
+| [Apple `container`](#apple-container-climacos-15) | macOS 15+ | 不需要 Docker Desktop |
+
+---
+
+## Docker Compose
+
+前置：Docker Engine 20.10+ / Compose v2。
+
+```bash
+docker compose up --build       # 前台
+docker compose up -d --build    # 后台
+docker compose exec app bash    # 进 app 容器
+docker compose logs -f asr      # 看 ASR 推理日志
+docker compose down             # 停止 & 删除
+```
+
+- app 通过 Compose 内置 DNS 访问 asr（`http://asr:8000`),不需要任何桥接。
+- 首次启动会：install 依赖 → prisma generate → prisma db push → next dev,大约 2–3 分钟。
+- 之后 `node_modules` 存在匿名 volume 里,重启秒开。
+
+**代理**：如果需要走本机代理（比如 Clash/Mihomo）:
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+# 里面已经把 host.docker.internal:7897 配好,按需修改端口
+docker compose up --build
+```
+
+Linux 主机需要 `extra_hosts: ["host.docker.internal:host-gateway"]`（示例文件里已经写好）。macOS/Windows Docker Desktop 天然支持 `host.docker.internal`。
+
+**Huggingface 模型缓存**：`asr` 服务会把宿主 `~/.cache/huggingface` 挂进容器,不重复下载。首次运行前如果本机没有 `Systran/faster-whisper-small`,容器会自动下载（~464MB,走代理时约 3–5 分钟）。
+
+**修改端口**：`.env` 里改 `APP_PORT` / `ASR_PORT` 或 `HF_CACHE_DIR`（参考 `.env.example`）。
+
+---
+
+## Apple `container` CLI (macOS 15+)
+
+不装 Docker Desktop 时的替代方案。两个容器 + 一个宿主代理桥。
 
 ## 前置
 - macOS 15+ 且已装 `container`（`container --version` 应能输出）
 - 宿主机代理监听 `127.0.0.1:7897`（对应 `~/.zshrc` 里的 `proxy_on`）
 - 宿主机 `python3` 存在（macOS 自带）
-- Huggingface 模型缓存在 `~/.cache/huggingface`（会被 ASR 容器**只读挂载**，无需重下）
+- Huggingface 模型缓存在 `~/.cache/huggingface`（会被 ASR 容器**只读挂载**,无需重下）
 
 ## 一次性准备
 

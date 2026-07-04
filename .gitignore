@@ -8,3 +8,5 @@ storage
 tsconfig.tsbuildinfo
 scripts/.bridge.log
 scripts/.asr_bridge.log
+# Docker Compose user overrides (they may contain secrets / host paths)
+docker-compose.override.yml

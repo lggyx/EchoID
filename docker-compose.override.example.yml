@@ -1,0 +1,34 @@
+# EchoID — proxy override for Docker Compose.
+#
+# Copy to `docker-compose.override.yml` (which Compose loads automatically)
+# to route both containers' outbound HTTP/HTTPS through your host proxy.
+#
+# On Linux, add:
+#   extra_hosts: [ "host.docker.internal:host-gateway" ]
+# On macOS / Windows Docker Desktop, `host.docker.internal` already resolves.
+#
+# NO_PROXY includes `asr` and `app` so container→container traffic stays
+# on the internal bridge network.
+
+services:
+  app:
+    environment:
+      HTTP_PROXY: http://host.docker.internal:7897
+      HTTPS_PROXY: http://host.docker.internal:7897
+      http_proxy: http://host.docker.internal:7897
+      https_proxy: http://host.docker.internal:7897
+      NO_PROXY: localhost,127.0.0.1,asr,app
+      no_proxy: localhost,127.0.0.1,asr,app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  asr:
+    environment:
+      HTTP_PROXY: http://host.docker.internal:7897
+      HTTPS_PROXY: http://host.docker.internal:7897
+      http_proxy: http://host.docker.internal:7897
+      https_proxy: http://host.docker.internal:7897
+      NO_PROXY: localhost,127.0.0.1
+      no_proxy: localhost,127.0.0.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

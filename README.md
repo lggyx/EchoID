@@ -47,9 +47,33 @@ docs/
 └── DEV_CONTAINER.md        # container/proxy dev setup
 ```
 
-## Quick start (containerized)
+## Quick start
 
-Requires macOS 15+ with Apple `container` CLI. See `docs/DEV_CONTAINER.md` for details.
+Two supported dev environments — pick either.
+
+### Docker Compose (recommended, cross-platform)
+
+Requires Docker Engine 20.10+ with Compose v2.
+
+```bash
+docker compose up --build      # builds both images, starts app + asr
+```
+
+Open <http://localhost:3000>. The Node app reaches faster-whisper at
+`http://asr:8000` over Compose's private network — no host tricks needed.
+
+Behind a proxy?
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+# edit the proxy URL, then:
+docker compose up --build
+```
+
+### Apple `container` CLI (macOS 15+)
+
+For working on Apple Silicon without Docker Desktop. See
+[`docs/DEV_CONTAINER.md`](docs/DEV_CONTAINER.md).
 
 ```bash
 scripts/dev.sh bridge      # host proxy bridge (loopback → NAT gateway)
@@ -59,9 +83,9 @@ scripts/dev.sh up          # start bridge + asr sidecar
 scripts/dev.sh dev         # run `npm run dev`, publish :3000
 ```
 
-Open <http://localhost:3000>.
-
-Model files (`Systran/faster-whisper-small`, ~464 MB) are read-only-mounted from the host at `~/.cache/huggingface`, so nothing is re-downloaded.
+Model files (`Systran/faster-whisper-small`, ~464 MB) are read-only-mounted
+from the host at `~/.cache/huggingface` under both setups, so nothing is
+re-downloaded.
 
 ## Debug mode
 

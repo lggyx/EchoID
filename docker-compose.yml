@@ -1,0 +1,85 @@
+# EchoID — Docker Compose dev stack.
+#
+# Two services on a shared bridge network. The Node app reaches the ASR
+# service by hostname (Docker's built-in DNS), so no port bridge is needed
+# and no host gateway trick like the Apple `container` setup.
+#
+# Usage:
+#   docker compose up          # foreground
+#   docker compose up -d       # detached
+#   docker compose exec app bash
+#
+# Behind a proxy? Copy docker-compose.override.example.yml to
+# docker-compose.override.yml and set your proxy URL. Also `.env.example` -> `.env`.
+#
+# Model cache: mounts your host ~/.cache/huggingface into the asr container
+# so the ~464MB faster-whisper model is not re-downloaded per rebuild.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: echoid-app:latest
+    container_name: echoid-app
+    working_dir: /app
+    command: >
+      bash -lc "
+      set -e;
+      [ -d node_modules/next ] || npm install --no-fund --no-audit;
+      npx prisma generate;
+      npx prisma db push;
+      exec npm run dev -- -H 0.0.0.0 -p 3000
+      "
+    environment:
+      NODE_ENV: development
+      # Reach the asr sidecar via Docker's service DNS.
+      ASR_ENDPOINT: http://asr:8000
+    # If you have a .env at the repo root, uncomment to load it. Kept off by
+    # default so `docker compose up` works on a fresh clone without one.
+    # env_file:
+    #   - .env
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      # Bind-mount source for hot reload.
+      - .:/app
+      # Anonymous volumes so node_modules & .next stay inside the container
+      # and don't collide with the host filesystem.
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      asr:
+        condition: service_healthy
+    networks:
+      - echoid
+
+  asr:
+    build:
+      context: ./services/asr
+      dockerfile: Dockerfile
+    image: echoid-asr:latest
+    container_name: echoid-asr
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-Systran/faster-whisper-small}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-zh}
+    ports:
+      # Also expose to the host for direct curl testing; optional.
+      - "${ASR_PORT:-8000}:8000"
+    volumes:
+      # Read-only mount of host HF cache so we don't re-download the model.
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-m", "3", "http://localhost:8000/healthz"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 30s
+    networks:
+      - echoid
+
+networks:
+  echoid:
+    driver: bridge
