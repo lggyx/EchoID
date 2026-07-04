@@ -1,5 +1,12 @@
-// Prisma schema for EchoID MVP
-// SQLite + local file system storage
+// Prisma schema for EchoID / VBTI
+// SQLite + local file system storage.
+//
+// v1.1 VBTI transition: legacy EchoID fields on `AnalysisResult` are kept
+// nullable and used by the single-segment code path. New VBTI fields
+// (contrastRate/dramaDensity/z*/matchedPersonaId/...) are added alongside.
+// When tracks A/B commit the VBTI shape to types/core.ts, the legacy
+// columns can be dropped in a follow-up migration.
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,24 +20,75 @@ model Recording {
   id         String   @id
   ownerAnon  String
   duration   Float
-  audioPath  String
+  // For single-segment (legacy) submissions, the audio path lives here.
+  // For 5-segment VBTI submissions this stays nullable — per-segment paths
+  // live on RecordingSegment.
+  audioPath  String?
   status     String   @default("pending")
   expiresAt  DateTime
   createdAt  DateTime @default(now())
+  // VBTI stage-direction from the 5th question ("male" | "female" | "random").
+  // Null on legacy EchoID recordings.
+  stageDirection String?
+  segments   RecordingSegment[]
   result     AnalysisResult?
+}
+
+model RecordingSegment {
+  id            String   @id
+  recordingId   String
+  recording     Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  /// 1..5 for VBTI's 5-question flow. Unique per recording.
+  questionIndex Int
+  audioPath     String
+  duration      Float
+  transcript    String   @default("")
+  featuresJson  String   @default("{}")
+  /// Semantic arousal from the LLM (0..1). Nullable so we can persist the
+  /// row before the LLM finishes (or if it fails and we use the keyword fallback).
+  semanticArousal Float?
+  /// Acoustic arousal computed by the DSP layer.
+  acousticArousal Float?
+  /// Per-segment contrast rate = |sem - ac| * 100.
+  contrastRate  Float?
+  /// Per-segment drama density.
+  dramaDensity  Float?
+  createdAt     DateTime @default(now())
+
+  @@unique([recordingId, questionIndex])
 }
 
 model AnalysisResult {
   id             String   @id
   recordingId    String   @unique
   recording      Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
-  featuresJson   String
-  dimensionsJson String
-  matchedRoleId  String
+
+  // --- Legacy EchoID fields (nullable so VBTI-only results can skip them) ---
+  featuresJson   String?
+  dimensionsJson String?
+  matchedRoleId  String?
+  transcript     String?
+
+  // --- Shared fields (both legacy + VBTI populate these) ---
   headline       String
   cardCopy       String
   imageUrl       String
-  transcript     String?
+
+  // --- VBTI fields (nullable while legacy rows still exist) ---
+  contrastRateAvg     Float?
+  contrastRateStd     Float?
+  dramaDensityAvg     Float?
+  z1SpeedStability    Float?
+  z2VolumeStrength    Float?
+  z3MonologueTendency Float?
+  /// JSON array of triggered signature IDs, e.g. ["film_method_actor"].
+  triggeredSignatures String?
+  matchedSubsystem    String?
+  matchedPersonaId    String?
+  /// Optional structured evidence blob rendered on the result card
+  /// (e.g. per-signal number + human-language translation).
+  evidenceJson        String?
+
   createdAt      DateTime @default(now())
   card           Card?
 }

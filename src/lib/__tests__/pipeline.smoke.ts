@@ -71,8 +71,8 @@ async function main(): Promise<void> {
   if (card.imageUrl !== res.imageUrl) throw new Error("Card.imageUrl mismatch");
 
   // 4) Full payload.
-  const features = JSON.parse(res.featuresJson);
-  const dimensions = JSON.parse(res.dimensionsJson);
+  const features = JSON.parse(res.featuresJson ?? "{}");
+  const dimensions = JSON.parse(res.dimensionsJson ?? "[]");
 
   const payload = {
     recordingId: rec.id,

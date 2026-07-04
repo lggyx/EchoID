@@ -48,7 +48,8 @@ export async function GET(
   return NextResponse.json(payload);
 }
 
-function safeParse<T>(raw: string): T | null {
+function safeParse<T>(raw: string | null | undefined): T | null {
+  if (!raw) return null;
   try {
     return JSON.parse(raw) as T;
   } catch {

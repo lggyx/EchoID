@@ -163,3 +163,54 @@ export interface AnalyzeFullResponse extends AnalyzePartialResponse {
   features: AcousticFeatures;
   cardCopy: string;
 }
+
+// ============ VBTI Segmented Analyze Contract (PRD §12.4) ============
+
+/**
+ * The 5th question in VBTI lets the user pick who they're playing —
+ * "male-lead" line-set, "female-lead" line-set, or randomized mix. The
+ * frontend passes this string through on submit so the persistence layer
+ * can round-trip it into `Recording.stageDirection`.
+ */
+export type StageDirection = "male" | "female" | "random";
+
+/**
+ * Metadata block that accompanies the multipart array upload.
+ *
+ * Wire format: a single form field named `meta` whose value is JSON.
+ * The audio files themselves are appended as repeated `audio` fields,
+ * one per question (5 for the full VBTI flow).
+ *
+ * Example client usage:
+ *   const fd = new FormData();
+ *   fd.append("meta", JSON.stringify({ stageDirection: "male", questionCount: 5 }));
+ *   for (const blob of blobs) fd.append("audio", blob, `q${i}.webm`);
+ */
+export interface AnalyzeSegmentedMeta {
+  /** Should match the number of `audio` fields appended. Sanity-check only. */
+  questionCount: number;
+  /** Chosen戏路 for question 5. Absent on non-VBTI submissions. */
+  stageDirection?: StageDirection;
+}
+
+/**
+ * Partial reveal payload returned right after upload. VBTI adds the
+ * matched subsystem name (影视/综艺/舞台/机器人/街头) as the first-stage
+ * suspense hook — persona is only revealed after unlock.
+ *
+ * Legacy EchoID responses populate `roleTitle`/`headline` and leave the
+ * VBTI-only fields undefined; VBTI responses populate all of them.
+ */
+export interface AnalyzeSegmentedPartialResponse {
+  recordingId: string;
+  resultId: string;
+  cardId: string;
+  headline: string;
+  imageUrl: string;
+  /** VBTI: matched subsystem, e.g. "variety". */
+  matchedSubsystem?: string;
+  /** VBTI: subsystem's human-readable label, e.g. "综艺组". */
+  subsystemTitle?: string;
+  /** Legacy EchoID compatibility. */
+  roleTitle?: string;
+}
