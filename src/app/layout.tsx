@@ -2,23 +2,25 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EchoID · 你说话像谁",
+  title: "声音照妖镜 · VBTI",
   description:
-    "对着麦克风说 20 秒,EchoID 用真实声学特征为你画出一张说话风格卡片。",
+    "60 秒声学取证。系统只听声音,不问对错,给你一份判决书。",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#120F17",
+  themeColor: "#1A1A1A",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN" className="dark">
+    <html lang="zh-CN">
       <head>
-        {/* Fonts inspired by reactbits.dev — Bricolage for display, Noto SC for CJK. */}
+        {/* VBTI display fonts. Ma Shan Zheng = brushed calligraphy for
+            headline; Noto Sans SC covers body + heading weights;
+            JetBrains Mono is the data / Exhibit-tag typeface. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -27,10 +29,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Noto+Sans+SC:wght@300;400;500;700&family=Google+Sans+Code:wght@300..700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@400;700;900&family=JetBrains+Mono:wght@400;500;700&family=Cinzel:wght@600;800&display=swap"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <div className="grain" aria-hidden />
+        <div className="spotlight" aria-hidden />
+        {children}
+      </body>
     </html>
   );
 }

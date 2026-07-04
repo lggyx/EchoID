@@ -2,75 +2,211 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * VBTI · 声音照妖镜 base styles.
+ * Dark detective / archive-noir palette. Physical, tactile, warm-dark.
+ */
+
 :root {
   color-scheme: dark;
 }
 
 html,
 body {
-  background: #120f17;
-  color: #f5f1ff;
+  background: #1a1a1a;
+  color: #f5f0e8;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
 
 body {
   font-family:
-    "Bricolage Grotesque", "Noto Sans SC", -apple-system, BlinkMacSystemFont,
-    "PingFang SC", system-ui, sans-serif;
-  font-feature-settings: "ss01", "ss02";
+    "Noto Sans SC", "PingFang SC", -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
   min-height: 100dvh;
+  /* Vignette + faint grain baked into the body so every page inherits it. */
+  background-image:
+    radial-gradient(circle at 82% 8%, rgba(232, 184, 122, 0.14) 0%, rgba(232, 184, 122, 0.03) 30%, transparent 55%),
+    radial-gradient(circle at 20% 110%, rgba(196, 75, 47, 0.08) 0%, transparent 60%);
+  background-attachment: fixed;
 }
 
-/* Selection uses the accent color for a subtle branded feel. */
 ::selection {
-  background: rgba(179, 124, 255, 0.35);
-  color: #ffffff;
+  background: rgba(196, 75, 47, 0.4);
+  color: #f5f0e8;
 }
 
-/* Custom scrollbar for depth. */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(179, 124, 255, 0.25);
-  border-radius: 10px;
+  background: rgba(232, 184, 122, 0.28);
+  border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(179, 124, 255, 0.45);
+  background: rgba(232, 184, 122, 0.5);
 }
 
-/* A repeated dotted grid used behind hero sections. */
-.bg-dots {
-  background-image: radial-gradient(
-    rgba(179, 124, 255, 0.12) 1px,
-    transparent 1px
-  );
-  background-size: 24px 24px;
-}
+/* ────────── Reusable material utilities ────────── */
 
-/* Utility for gradient border cards. */
-.grad-border {
+/* Aged paper — used by suspect card, evidence card, scene brief. */
+.aged-paper {
+  background-color: #f5f0e8;
+  color: #1f1a15;
+  background-image:
+    radial-gradient(circle at 30% 20%, rgba(139, 69, 19, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 70% 80%, rgba(139, 69, 19, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 90% 30%, rgba(0, 0, 0, 0.04) 0%, transparent 30%),
+    linear-gradient(180deg, #f5f0e8 0%, #ece3d0 100%);
+  box-shadow:
+    2px 3px 8px rgba(0, 0, 0, 0.4),
+    inset 0 0 30px rgba(139, 69, 19, 0.04);
+  border-radius: 2px;
   position: relative;
-  isolation: isolate;
 }
-.grad-border::before {
+/* faint scanned-page grain */
+.aged-paper::before {
   content: "";
   position: absolute;
   inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: linear-gradient(
-    135deg,
-    rgba(179, 124, 255, 0.7),
-    rgba(94, 231, 255, 0.5),
-    rgba(255, 161, 224, 0.4)
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
   pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      175deg,
+      transparent 0px,
+      rgba(139, 69, 19, 0.025) 1px,
+      transparent 3px
+    );
+  mix-blend-mode: multiply;
+  opacity: 0.6;
+}
+
+/* Blackboard / dark panel — used by stat readout and analysis panel. */
+.blackboard {
+  background-color: #2a2520;
+  color: #f5f0e8;
+  border: 1px solid rgba(232, 184, 122, 0.18);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    2px 3px 8px rgba(0, 0, 0, 0.4);
+  background-image: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(232, 184, 122, 0.05) 0%,
+    transparent 70%
+  );
+  position: relative;
+}
+
+/* Metal rivet corner — decorative dot in corners of blackboard cards. */
+.rivet {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, #d4bb8a 0%, #7a5c33 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+/* Rust CTA button surface — used for primary actions. */
+.rust-btn {
+  background-image: linear-gradient(180deg, #d4654a 0%, #c44b2f 55%, #8b3a25 100%);
+  color: #f5f0e8;
+  border: 1px solid rgba(232, 184, 122, 0.55);
+  border-radius: 4px;
+  padding: 12px 18px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.4),
+    0 -1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 2px 0 #6a2a17,
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition:
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    filter 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.rust-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.rust-btn:active {
+  transform: scale(0.97) translateY(1px);
+  box-shadow:
+    0 0 0 #6a2a17,
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  filter: brightness(0.92);
+}
+.rust-btn:disabled {
+  opacity: 0.4;
+  filter: grayscale(0.5);
+  cursor: not-allowed;
+}
+
+/* Copper outline button used for secondary actions. */
+.copper-btn {
+  background: transparent;
+  color: #e8b87a;
+  border: 1px solid #b8905a;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-family: "JetBrains Mono", "IBM Plex Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: all 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.copper-btn:hover {
+  background: rgba(232, 184, 122, 0.08);
+  border-color: #e8b87a;
+}
+.copper-btn:active {
+  transform: scale(0.97);
+}
+
+/* Full-viewport spotlight overlay applied via <Spotlight /> component. */
+.spotlight {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(
+    circle at 82% -5%,
+    rgba(232, 184, 122, 0.22) 0%,
+    rgba(232, 184, 122, 0.05) 25%,
+    transparent 50%
+  );
+  animation: lamp-pulse 2.6s ease-in-out infinite;
+}
+
+/* Very subtle noise texture overlay for the whole page. */
+.grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 0.6 0 0 0 0 0.5 0 0 0 0 0.4 0 0 0 0.7 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* Reduced-motion respect — kill the ambient animations. */
+@media (prefers-reduced-motion: reduce) {
+  .spotlight,
+  .grain {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

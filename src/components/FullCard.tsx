@@ -3,31 +3,30 @@
 import { useMemo, useState } from "react";
 import type {
   AnalyzeFullResponse,
-  Dimension,
-  DimensionKey,
+  AnalyzeSegmentedFullResponse,
+  EvidenceItem,
 } from "@/types/core";
-import DebugOverlay, { type DebugSection } from "@/components/DebugOverlay";
-import { useDebugMode } from "@/lib/debug";
-import GradientText from "@/components/GradientText";
+import {
+  AgedCard,
+  Blackboard,
+  CaseId,
+  ChainDivider,
+  CopperButton,
+  ExhibitTag,
+  RustButton,
+  Stamp,
+  StatBar,
+} from "@/components/vbti/material";
 
-const DIM_LABEL: Record<DimensionKey, string> = {
-  thinking_tempo: "思维节奏",
-  emotional_expressiveness: "情绪外显度",
-  presence: "气场",
-  decision_style: "决策模式",
-  communication_style: "沟通风格",
-  thinking_depth: "思维深度",
-};
+/* ────────── payload discrimination ────────── */
 
-// Canonical axis order — this is what the radar draws around the hexagon.
-const AXIS_ORDER: DimensionKey[] = [
-  "thinking_tempo",
-  "emotional_expressiveness",
-  "presence",
-  "decision_style",
-  "communication_style",
-  "thinking_depth",
-];
+type LegacyFull = AnalyzeFullResponse;
+type VbtiFull = AnalyzeSegmentedFullResponse & { roleTitle?: string };
+type AnyFull = LegacyFull | VbtiFull;
+
+function isVbti(full: AnyFull): full is VbtiFull {
+  return "matchedSubsystem" in full && !!(full as VbtiFull).matchedSubsystem;
+}
 
 type ShareResponse = {
   cardId: string;
@@ -35,26 +34,89 @@ type ShareResponse = {
   shareUrl: string;
 };
 
+/* ────────── helpers ────────── */
+
+/** Strip "你演得像·..." prefix from a headline so we can render the persona
+ *  name on its own. */
+function stripYouSoundLike(s?: string): string {
+  if (!s) return "";
+  return s
+    .replace(/^你演得像[·:：\s]*/u, "")
+    .replace(/^YOU SOUND LIKE[·:：\s]*/iu, "")
+    .trim();
+}
+
+/** Split cardCopy into 2 judgment lines by "。" — used in the aged-paper
+ *  quote block. Falls back to the whole string. */
+function splitJudgment(copy: string, headline: string): [string, string] {
+  const src = (copy || headline || "").trim();
+  if (!src) return ["", ""];
+  const parts = src
+    .split(/[。！？!?]+/u)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) return [parts[0] + "。", parts.slice(1).join("。") + "。"];
+  return [parts[0] || src, ""];
+}
+
+/** Coerce whatever `evidenceJson` came back as into an EvidenceItem[]. It
+ *  can be null (older DB rows), a `{evidence: [...]}` wrapper, or already
+ *  a bare array. */
+function coerceEvidence(raw: unknown): EvidenceItem[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as EvidenceItem[];
+  if (typeof raw === "object") {
+    const r = raw as { evidence?: unknown };
+    if (Array.isArray(r.evidence)) return r.evidence as EvidenceItem[];
+  }
+  return [];
+}
+
+/** Synthesize exhibits from segmentsSummary when evidenceJson is empty —
+ *  we grab whichever three segments have the highest drama density and
+ *  distill each into a one-line "abstract". */
+function synthesizeExhibits(
+  segments: VbtiFull["segmentsSummary"],
+): EvidenceItem[] {
+  return [...segments]
+    .sort((a, b) => (b.dramaDensity ?? 0) - (a.dramaDensity ?? 0))
+    .slice(0, 3)
+    .map((s, i) => ({
+      key: `synth_${i}`,
+      label: `第 ${s.questionIndex} 题`,
+      value: Math.round(s.dramaDensity ?? 0),
+      unit: "%",
+      segmentIndex: s.questionIndex,
+      text:
+        (s.transcript || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 60) || "(无 transcript)",
+    }));
+}
+
+const EXHIBIT_LETTERS = ["A", "B", "C", "D"];
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Main
+ * ═══════════════════════════════════════════════════════════════════════ */
+
 export default function FullCard({
   full,
   resultId,
 }: {
-  full: AnalyzeFullResponse;
+  full: AnyFull;
   resultId?: string;
 }) {
-  const debug = useDebugMode();
-  const [openKey, setOpenKey] = useState<DimensionKey | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareErr, setShareErr] = useState<string>("");
   const [share, setShare] = useState<ShareResponse | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  // Index dimensions by key so we can render in canonical axis order even
-  // if the backend returns them shuffled.
-  const dimByKey = useMemo(() => {
-    const m = new Map<DimensionKey, Dimension>();
-    for (const d of full.dimensions) m.set(d.key, d);
-    return m;
-  }, [full.dimensions]);
+  const shortId = useMemo(
+    () => (resultId ?? full.resultId ?? "").slice(0, 6).toUpperCase() || "??????",
+    [resultId, full.resultId],
+  );
 
   const doShare = async () => {
     setSharing(true);
@@ -64,7 +126,7 @@ export default function FullCard({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          resultId: resultId ?? null,
+          resultId: resultId ?? full.resultId ?? null,
           cardId: full.cardId ?? null,
         }),
       });
@@ -78,326 +140,367 @@ export default function FullCard({
     }
   };
 
-  const debugSections: DebugSection[] = debug
-    ? [
-        {
-          title: "matched",
-          rows: [
-            ["role_title", full.roleTitle],
-            ["headline", full.headline],
-            ["result_id", resultId ?? "-"],
-            ["card_id", full.cardId ?? "-"],
-          ],
-        },
-        {
-          title: "dimensions (0..100)",
-          rows: full.dimensions.map(
-            (d): [string, string | number] => [
-              `${DIM_LABEL[d.key] ?? d.key}`,
-              `${Math.round(d.score)}  ${d.levelLabel}`,
-            ],
-          ),
-        },
-        {
-          title: "acoustic features",
-          rows: acousticRows(full.features),
-        },
-        {
-          title: "raw features JSON",
-          json: full.features,
-        },
-      ]
+  const doCopyLink = async () => {
+    const url =
+      typeof window !== "undefined" && full.cardId
+        ? `${window.location.origin}/s/${full.cardId}`
+        : "";
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      /* silent — clipboard perms can vary. */
+    }
+  };
+
+  const doSystemShare = async () => {
+    const url =
+      typeof window !== "undefined" && full.cardId
+        ? `${window.location.origin}/s/${full.cardId}`
+        : "";
+    const persona = stripYouSoundLike(full.headline);
+    const text = persona
+      ? `声音照妖镜判决 · ${persona}`
+      : "声音照妖镜判决书";
+    if (typeof navigator !== "undefined" && "share" in navigator) {
+      try {
+        await (navigator as Navigator & {
+          share: (d: { title?: string; text?: string; url?: string }) => Promise<void>;
+        }).share({ title: "声音照妖镜", text, url });
+        return;
+      } catch {
+        /* fall through to clipboard */
+      }
+    }
+    await doCopyLink();
+  };
+
+  const vbti = isVbti(full) ? full : null;
+
+  /* ─── metric extraction ─── */
+  // These five labels ARE the product's flagship metric — name/mapping
+  // must match the design brief exactly, even where two rows share a
+  // source (节目效果值 and 抓马值 are both drama density).
+  const z1 = vbti?.z1SpeedStability ?? 0;
+  const dramaAvg = vbti?.dramaDensityAvg ?? 0;
+  const contrastAvg = vbti?.contrastRateAvg ?? 0;
+  const contrastStd = vbti?.contrastRateStd ?? 0;
+  const z2 = vbti?.z2VolumeStrength ?? 0;
+  const z3 = vbti?.z3MonologueTendency ?? 0;
+  const statBars: { label: string; value: number }[] = [
+    { label: "嘴硬指数", value: z1 },
+    { label: "节目效果值", value: dramaAvg },
+    { label: "抓马值", value: dramaAvg },
+    { label: "破防值", value: 100 - z1 },
+    { label: "情绪泄漏值", value: contrastAvg },
+  ];
+
+  const persona = stripYouSoundLike(full.headline) || full.headline || "无名嫌疑人";
+  const subsystemTitle = vbti?.subsystemTitle;
+  const flipPct = Math.round(contrastAvg);
+  const [line1, line2] = splitJudgment(
+    (full as { cardCopy?: string }).cardCopy ?? "",
+    full.headline ?? "",
+  );
+
+  /* ─── exhibits ─── */
+  const rawEvidence = vbti ? coerceEvidence(vbti.evidenceJson) : [];
+  const exhibits: EvidenceItem[] = vbti
+    ? rawEvidence.length > 0
+      ? rawEvidence.slice(0, 4)
+      : synthesizeExhibits(vbti.segmentsSummary ?? [])
     : [];
 
   return (
-    <article className="flex flex-col gap-6 pb-16 animate-fade-up">
-      {debug && <DebugOverlay sections={debugSections} />}
-      {/* Hero image */}
-      <div className="w-full aspect-square rounded-3xl overflow-hidden grad-border bg-surface">
-        {full.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={full.imageUrl}
-            alt={full.roleTitle}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted text-sm">
-            无图
-          </div>
-        )}
-      </div>
-
-      {/* Headline block */}
-      <header className="text-center flex flex-col gap-3">
-        <div className="font-mono text-[10px] tracking-[0.3em] text-subtle">
-          YOU SOUND LIKE
-        </div>
-        <h1 className="font-display font-medium text-4xl leading-tight">
-          <GradientText as="span">{full.roleTitle}</GradientText>
-        </h1>
-        <p className="text-sm text-muted leading-relaxed">{full.headline}</p>
+    <article className="flex flex-col gap-6 pb-12">
+      {/* 1 · Top header row */}
+      <header className="flex items-center justify-between font-mono text-[11px] tracking-[0.3em] text-copperDim uppercase">
+        <span>声音照妖镜判决书</span>
+        <span>CASE FILE Nº {shortId}</span>
       </header>
 
-      {/* Radar */}
-      <section className="flex flex-col items-center gap-3">
-        <div className="font-mono text-[10px] tracking-[0.3em] text-subtle">
-          6-D RADAR
-        </div>
-        <Radar
-          scores={AXIS_ORDER.map((k) => dimByKey.get(k)?.score ?? 0)}
-          labels={AXIS_ORDER.map((k) => DIM_LABEL[k])}
-        />
-      </section>
+      {/* 2 · 嫌疑人档案 aged card */}
+      <div className="animate-fade-up" style={{ animationDelay: "0ms" }}>
+        <AgedCard rotate={-1.5} pin="left" className="text-inkText">
+          <div className="flex flex-col gap-4">
+            <CaseId n="01" label="SUSPECT" />
 
-      {/* Dimension rows */}
-      <section className="flex flex-col divide-y divide-line/60 rounded-2xl bg-surface/70 backdrop-blur-sm grad-border">
-        {AXIS_ORDER.map((k) => {
-          const d = dimByKey.get(k);
-          if (!d) return null;
-          const open = openKey === k;
-          return (
-            <div key={k}>
-              <button
-                onClick={() => setOpenKey(open ? null : k)}
-                className="w-full flex items-center justify-between px-4 py-4 text-left"
-                aria-expanded={open}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-mono text-[10px] tracking-[0.2em] text-subtle uppercase">
-                    {DIM_LABEL[k]}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="font-mono text-[10px] tracking-[0.25em] text-inkText/50 uppercase mb-1">
+                  嫌 疑 人 格
+                </div>
+                <h1 className="font-heading font-black text-inkText leading-tight text-[22px] break-words">
+                  {persona}
+                </h1>
+                {subsystemTitle && (
+                  <div className="mt-2">
+                    <span className="inline-block border border-copperDim text-copperDim font-mono text-[10px] tracking-[0.15em] uppercase px-2 py-[3px] rounded-sharp bg-inkText/[0.03]">
+                      分区 · {subsystemTitle}
+                    </span>
                   </div>
-                  <div className="font-medium text-base truncate text-ink">
-                    {d.levelLabel}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <ScoreBar score={d.score} />
-                  <span className="tabular-nums text-sm w-8 text-right text-ink font-mono">
-                    {Math.round(d.score)}
-                  </span>
-                  <span
-                    className={`text-muted transition-transform ${
-                      open ? "rotate-180" : ""
-                    }`}
-                    aria-hidden
-                  >
-                    ▾
-                  </span>
-                </div>
-              </button>
-              {open && (
-                <div className="px-4 pb-4 -mt-1 text-sm text-ink/80 leading-relaxed flex flex-col gap-2 animate-fade-up">
-                  <p>{d.oneLiner}</p>
-                  <p className="text-xs text-subtle font-mono">
-                    EVIDENCE · {d.evidenceMetric}
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          );
-        })}
-      </section>
 
-      {/* Share */}
-      <section className="flex flex-col gap-3">
-        {!share ? (
-          <button
-            onClick={doShare}
-            disabled={sharing}
-            className="w-full rounded-full bg-grad-primary bg-[length:200%_200%] animate-gradient-shift text-canvas py-4 text-base font-semibold shadow-glow active:scale-[0.98] transition disabled:opacity-60"
-          >
-            {sharing ? "生成中…" : "生成分享图"}
-          </button>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <div className="w-full rounded-2xl overflow-hidden border border-line">
+            <div className="border-t border-inkText/15" />
+
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex-1">
+                <div className="font-mono text-[10px] tracking-[0.25em] text-inkText/50 uppercase mb-1">
+                  人 设 翻 车 率
+                </div>
+                <div className="font-mono text-inkText font-bold text-[38px] leading-none tabular-nums">
+                  {flipPct}
+                  <span className="text-inkText/50 text-[20px] ml-0.5">%</span>
+                </div>
+              </div>
+              <div className="pt-2">
+                <Stamp text="已实锤" size="md" drop rotate={-14} />
+              </div>
+            </div>
+          </div>
+        </AgedCard>
+      </div>
+
+      {/* 3 · Hero portrait */}
+      {full.imageUrl && (
+        <div className="animate-fade-up" style={{ animationDelay: "100ms" }}>
+          <AgedCard rotate={1} className="p-3">
+            <div className="relative w-full aspect-square bg-cardPaperEdge/40 rounded-sharp overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={share.shareImageUrl}
-                alt="分享图"
-                className="w-full h-auto"
+                src={full.imageUrl}
+                alt={persona}
+                className="w-full h-full object-contain"
+                loading="lazy"
               />
+              {/* corner exhibit tag riding on top of the portrait */}
+              <div className="absolute top-2 right-2">
+                <ExhibitTag label="PORTRAIT · 01" />
+              </div>
             </div>
-            <a
-              href={share.shareImageUrl}
-              download
-              className="w-full text-center rounded-full bg-ink text-canvas py-3 text-sm font-medium"
-            >
-              保存分享图
-            </a>
-            <a
-              href={share.shareUrl}
-              className="w-full text-center rounded-full border border-line py-3 text-sm text-ink"
-            >
-              打开分享页
-            </a>
-          </div>
-        )}
-        {shareErr && (
-          <p className="text-xs text-rose-400 text-center">{shareErr}</p>
-        )}
-        <p className="text-[11px] text-subtle text-center leading-relaxed font-mono">
-          分析基于本次录音的声学特征 · 结果仅供娱乐参考
+          </AgedCard>
+        </div>
+      )}
+
+      {/* 4 · Judgment quote */}
+      {(line1 || line2) && (
+        <div className="animate-fade-up" style={{ animationDelay: "200ms" }}>
+          <AgedCard rotate={-0.8} className="text-inkText">
+            <div className="relative py-3">
+              <span
+                aria-hidden
+                className="absolute -top-2 left-1 font-display text-[56px] leading-none text-rust/70 select-none"
+              >
+                「
+              </span>
+              <div className="px-6 flex flex-col gap-2">
+                {line1 && (
+                  <p className="font-heading font-bold text-inkText text-judgment leading-snug">
+                    {line1}
+                  </p>
+                )}
+                {line2 && (
+                  <p className="font-heading font-medium text-inkText/80 text-[15px] leading-relaxed">
+                    {line2}
+                  </p>
+                )}
+              </div>
+              <span
+                aria-hidden
+                className="absolute -bottom-6 right-1 font-display text-[56px] leading-none text-rust/70 select-none"
+              >
+                」
+              </span>
+            </div>
+          </AgedCard>
+        </div>
+      )}
+
+      {/* 5 · Blackboard · 声音暴露指数 */}
+      {vbti && (
+        <div className="animate-fade-up" style={{ animationDelay: "300ms" }}>
+          <Blackboard>
+            <div className="flex items-start justify-between mb-3">
+              <h2 className="font-heading font-black text-copper text-h2 tracking-wider">
+                声音暴露指数
+              </h2>
+              <ExhibitTag label="AUDIO · 05" />
+            </div>
+            <div className="flex flex-col divide-y divide-copperDim/15">
+              {statBars.map((b, i) => (
+                <div
+                  key={i}
+                  className="animate-fade-up"
+                  style={{ animationDelay: `${350 + i * 60}ms` }}
+                >
+                  <StatBar label={b.label} value={b.value} outOf={100} />
+                </div>
+              ))}
+            </div>
+          </Blackboard>
+        </div>
+      )}
+
+      {/* 6 · Blackboard · 系统掌握的 N 条罪证 */}
+      {vbti && exhibits.length > 0 && (
+        <div className="animate-fade-up" style={{ animationDelay: "400ms" }}>
+          <Blackboard>
+            <div className="flex items-start justify-between mb-3">
+              <h2 className="font-heading font-black text-copper text-h2 tracking-wider">
+                系统掌握的 {exhibits.length} 条罪证
+              </h2>
+              <ExhibitTag label={`CT · 0${exhibits.length}`} />
+            </div>
+            <div className="flex flex-col gap-3">
+              {exhibits.map((ev, i) => {
+                const letter = EXHIBIT_LETTERS[i] ?? String(i + 1);
+                const rotate = i % 2 === 0 ? -0.8 : 0.9;
+                return (
+                  <div
+                    key={ev.key ?? i}
+                    className="animate-fade-up"
+                    style={{ animationDelay: `${450 + i * 80}ms` }}
+                  >
+                    <AgedCard rotate={rotate} className="text-inkText">
+                      <div className="flex gap-3">
+                        <div className="pt-0.5">
+                          <ExhibitTag label={`EXHIBIT ${letter}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-mono text-[10px] tracking-[0.2em] text-inkText/55 uppercase mb-1">
+                            {ev.segmentIndex ? `第 ${ev.segmentIndex} 题` : ev.label || "证物"}
+                            {typeof ev.value === "number" && ev.unit
+                              ? ` · ${Math.round(ev.value)}${ev.unit}`
+                              : typeof ev.value === "number"
+                                ? ` · ${Math.round(ev.value)}`
+                                : ev.value
+                                  ? ` · ${ev.value}${ev.unit ?? ""}`
+                                  : ""}
+                          </div>
+                          <p className="text-[13px] leading-relaxed text-inkText/85 break-words">
+                            {ev.text || "(无描述)"}
+                          </p>
+                        </div>
+                      </div>
+                    </AgedCard>
+                  </div>
+                );
+              })}
+            </div>
+          </Blackboard>
+        </div>
+      )}
+
+      {/* 7 · Optional additional metrics */}
+      {vbti && (
+        <div className="animate-fade-up" style={{ animationDelay: "550ms" }}>
+          <Blackboard rivets={false}>
+            <div className="grid grid-cols-3 gap-3 py-1">
+              <MetricCell label="翻车方差" value={contrastStd} unit="σ" />
+              <MetricCell label="声压强度" value={z2} unit="/100" />
+              <MetricCell label="独白倾向" value={z3} unit="/100" />
+            </div>
+          </Blackboard>
+        </div>
+      )}
+
+      {/* 8 · Share flow */}
+      <div className="animate-fade-up" style={{ animationDelay: "650ms" }}>
+        <Blackboard title="分享档案">
+          {!share ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-paperDim text-[13px] leading-relaxed">
+                一键生成分享图,把这份判决书发去群里公开审判。
+              </p>
+              <CopperButton onClick={doShare} disabled={sharing}>
+                {sharing ? "冲洗中……" : "生成分享图"}
+              </CopperButton>
+              {shareErr && (
+                <p className="text-rust font-mono text-[11px]">{shareErr}</p>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="rounded-sharp overflow-hidden border border-copperDim/40 bg-black/20">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={share.shareImageUrl}
+                  alt="分享图"
+                  className="w-full h-auto"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <CopperButton
+                  as="a"
+                  href={share.shareImageUrl}
+                  download
+                  className="text-center"
+                >
+                  存 图
+                </CopperButton>
+                <CopperButton
+                  as="a"
+                  href={share.shareUrl}
+                  className="text-center"
+                >
+                  打 开
+                </CopperButton>
+              </div>
+            </div>
+          )}
+        </Blackboard>
+      </div>
+
+      {/* CTA row */}
+      <div
+        className="flex flex-col gap-3 animate-fade-up"
+        style={{ animationDelay: "750ms" }}
+      >
+        <RustButton onClick={doCopyLink} className="w-full text-[15px] py-4">
+          {copied ? "已复制 · 链接归你了" : "公开处刑 · 复制链接"}
+        </RustButton>
+        <div className="grid grid-cols-2 gap-2">
+          <CopperButton onClick={doSystemShare} className="text-center">
+            发群里看看
+          </CopperButton>
+          <CopperButton as="a" href="/" className="text-center">
+            拉人受审
+          </CopperButton>
+        </div>
+        <p className="font-mono text-[10px] tracking-[0.25em] text-paperMuted uppercase text-center pt-1">
+          分析基于本次 60s 声学取证 · 结果仅供娱乐
         </p>
-      </section>
+      </div>
+
+      <ChainDivider />
     </article>
   );
 }
 
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.max(0, Math.min(100, score));
+/* ────────── small internal cells ────────── */
+
+function MetricCell({
+  label,
+  value,
+  unit,
+}: {
+  label: string;
+  value: number;
+  unit: string;
+}) {
   return (
-    <div className="w-16 h-1.5 rounded-full bg-line overflow-hidden">
-      <div
-        className="h-full bg-grad-primary bg-[length:200%_200%] animate-gradient-shift"
-        style={{ width: `${pct}%` }}
-      />
+    <div className="flex flex-col items-center text-center border border-copperDim/20 rounded-sharp py-2 px-1 bg-black/20">
+      <div className="font-mono text-[9px] tracking-[0.2em] text-copperDim uppercase mb-1">
+        {label}
+      </div>
+      <div className="font-mono font-bold text-copper text-[18px] leading-none tabular-nums">
+        {typeof value === "number" ? value.toFixed(unit === "σ" ? 1 : 0) : value}
+      </div>
+      <div className="font-mono text-[9px] text-paperMuted mt-0.5">{unit}</div>
     </div>
-  );
-}
-
-function acousticRows(
-  f: AnalyzeFullResponse["features"],
-): [string, string | number][] {
-  // Compact human-friendly units. The full JSON blob is in a separate section.
-  return [
-    ["duration", `${f.duration.toFixed(1)}s`],
-    ["语速", `${f.speechRate.toFixed(2)} 字/s`],
-    ["语速方差", f.speechRateVar.toFixed(3)],
-    ["停顿数", f.pauseCount],
-    ["平均停顿", `${f.pauseDurAvg.toFixed(2)}s`],
-    ["停顿占比", `${(f.pauseRatio * 100).toFixed(1)}%`],
-    ["F0 均值", `${f.f0Mean.toFixed(0)} Hz`],
-    ["F0 标准差", `${f.f0Std.toFixed(1)} Hz`],
-    ["F0 range", `${f.f0Range.toFixed(0)} Hz`],
-    ["RMS 均值", f.rmsMean.toFixed(3)],
-    ["RMS DR", f.rmsDr.toFixed(3)],
-    ["句尾斜率", `${f.pitchSlopeEnd.toFixed(1)} Hz/s`],
-    ["语气词率", `${f.fillerRate.toFixed(1)}/min`],
-    ["TTR", f.ttr.toFixed(3)],
-    ["平均句长", `${f.sentLen.toFixed(1)} 字`],
-  ];
-}
-
-/**
- * 6-axis radar chart drawn as raw SVG.
- * - Reference hexagon at 50%.
- * - Semi-transparent accent-color polygon for the actual scores.
- * - Axis labels in Chinese around the outside.
- */
-function Radar({ scores, labels }: { scores: number[]; labels: string[] }) {
-  const SIZE = 280;
-  const CX = SIZE / 2;
-  const CY = SIZE / 2;
-  const R = 90; // max radius for score=100
-  // Axis angles: start at top (-90°) then clockwise, 60° apart.
-  const angles = Array.from({ length: 6 }, (_, i) => -Math.PI / 2 + (i * Math.PI) / 3);
-
-  const pt = (r: number, i: number) => {
-    const a = angles[i];
-    return [CX + r * Math.cos(a), CY + r * Math.sin(a)] as const;
-  };
-
-  const polyPoints = (rs: number[]) =>
-    rs.map((r, i) => pt(r, i).join(",")).join(" ");
-
-  const reference = polyPoints(Array(6).fill(R * 0.5));
-  const outer = polyPoints(Array(6).fill(R));
-  const values = polyPoints(
-    scores.map((s) => (Math.max(0, Math.min(100, s)) / 100) * R),
-  );
-
-  // Label placement — sit just outside the outer hexagon.
-  const labelR = R + 22;
-
-  return (
-    <svg
-      viewBox={`0 0 ${SIZE} ${SIZE}`}
-      className="w-full max-w-[300px] h-auto"
-      aria-label="六维雷达图"
-    >
-      <defs>
-        <linearGradient id="radarGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#B37CFF" />
-          <stop offset="60%" stopColor="#5EE7FF" />
-          <stop offset="100%" stopColor="#FFA1E0" />
-        </linearGradient>
-        <radialGradient id="radarFill" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#B37CFF" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="#5EE7FF" stopOpacity="0.15" />
-        </radialGradient>
-      </defs>
-      {/* concentric hexagon grid at 25/50/75/100% */}
-      {[0.25, 0.5, 0.75, 1].map((f) => (
-        <polygon
-          key={f}
-          points={polyPoints(Array(6).fill(R * f))}
-          fill="none"
-          stroke="rgba(245,241,255,0.08)"
-          strokeWidth={1}
-        />
-      ))}
-      {/* axes */}
-      {angles.map((_, i) => {
-        const [x, y] = pt(R, i);
-        return (
-          <line
-            key={i}
-            x1={CX}
-            y1={CY}
-            x2={x}
-            y2={y}
-            stroke="rgba(245,241,255,0.08)"
-            strokeWidth={1}
-          />
-        );
-      })}
-      {/* reference 50% hexagon — subtle */}
-      <polygon
-        points={reference}
-        fill="rgba(245,241,255,0.03)"
-        stroke="rgba(245,241,255,0.14)"
-        strokeDasharray="3 3"
-      />
-      {/* actual values */}
-      <polygon
-        points={values}
-        fill="url(#radarFill)"
-        stroke="url(#radarGrad)"
-        strokeWidth={1.8}
-        strokeLinejoin="round"
-      />
-      {/* value dots */}
-      {scores.map((s, i) => {
-        const [x, y] = pt((Math.max(0, Math.min(100, s)) / 100) * R, i);
-        return <circle key={i} cx={x} cy={y} r={3} fill="#B37CFF" />;
-      })}
-      {/* outer outline for crispness */}
-      <polygon points={outer} fill="none" stroke="rgba(245,241,255,0.15)" />
-      {/* labels */}
-      {labels.map((label, i) => {
-        const a = angles[i];
-        const x = CX + labelR * Math.cos(a);
-        const y = CY + labelR * Math.sin(a);
-        const cos = Math.cos(a);
-        const anchor: "start" | "middle" | "end" =
-          cos > 0.3 ? "start" : cos < -0.3 ? "end" : "middle";
-        return (
-          <text
-            key={i}
-            x={x}
-            y={y}
-            textAnchor={anchor}
-            dominantBaseline="middle"
-            fontSize={11}
-            fill="#F5F1FF"
-            opacity={0.75}
-          >
-            {label}
-          </text>
-        );
-      })}
-    </svg>
   );
 }
