@@ -308,6 +308,10 @@ interface PlaceholderMatchInput {
  * (contrast, drama) plane the user lands in — the 5 canonical VBTI subsystems.
  * Real weights, signature triggers, and persona-level dispatch belong to
  * Track A's `lib/matching/`.
+ *
+ * Placeholder persona choice: each subsystem's "neutral center" card from
+ * public/personas/vbti/. Track A's `personas.ts` will override this with
+ * the correct per-region persona once matching lands.
  */
 function placeholderMatch(input: PlaceholderMatchInput): {
   matchedSubsystem: string;
@@ -318,25 +322,26 @@ function placeholderMatch(input: PlaceholderMatchInput): {
 } {
   const { contrastAvg, dramaAvg } = input;
   // Cheap 5-way classification — swap for real algorithm when it lands.
+  // Personas below are the VBTI 35-card pool's "prototypical" card per group.
   let subsystem = "film";
   let title = "影视组";
-  let persona = "steady_decision_maker";
+  let persona = "method_actor"; // 影视组代表 · 方法派
   if (dramaAvg > 65 && contrastAvg < 40) {
     subsystem = "street";
     title = "街头组";
-    persona = "cheerleader";
+    persona = "karaoke_king"; // 街头组 · 麦霸
   } else if (dramaAvg > 55) {
     subsystem = "variety";
     title = "综艺组";
-    persona = "standup_performer";
+    persona = "standup_performer"; // 综艺组 · 脱口秀选手
   } else if (dramaAvg < 25 && contrastAvg < 25) {
     subsystem = "robot";
     title = "机器人组";
-    persona = "calm_narrator";
+    persona = "navigation_announcer"; // 机器人组 · 导航播报员
   } else if (contrastAvg < 30 && dramaAvg < 50 && input.z3 > 60) {
     subsystem = "stage";
     title = "舞台组";
-    persona = "poet_reader";
+    persona = "poet_reader"; // 舞台组 · 朗诵艺术家 (VBTI 版, 不与 legacy 撞)
   }
 
   return {

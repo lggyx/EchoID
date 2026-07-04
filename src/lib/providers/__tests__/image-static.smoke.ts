@@ -95,7 +95,9 @@ async function checkFactory() {
     console.log("  ! factory did not pick StaticImageProvider (check IMAGE_PROVIDER env)");
     fail += 1;
   }
-  if (gen1.url !== "/personas/poet_reader.png") fail += 1;
+  // Post-VBTI: `poet_reader` now resolves to the VBTI 舞台组 card, not the
+  // legacy EchoID image. The legacy alias is `poet_reader_legacy`.
+  if (gen1.url !== "/personas/vbti/17_poet_reader.png") fail += 1;
   if (gen2.url !== FALLBACK_PERSONA_IMAGE) fail += 1;
   if (gen3.url !== FALLBACK_PERSONA_IMAGE) fail += 1;
   return fail;
