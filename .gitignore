@@ -12,3 +12,4 @@ scripts/.asr_bridge.log
 docker-compose.override.yml
 # Local audio fixtures for smoke tests
 tmp-audio/
+scripts/deck/__pycache__
