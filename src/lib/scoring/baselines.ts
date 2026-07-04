@@ -43,6 +43,12 @@ export const BASELINES: Record<keyof AcousticFeatures, Range> = {
   ttr: { min: 0.3, max: 0.75 },
   // Average sentence length in Chinese characters.
   sentLen: { min: 6, max: 24 },
+  // VBTI: debounced local extrema per second on short clips.
+  peakDensity: { min: 0, max: 6 },
+  // VBTI: already normalized regularity signal.
+  pauseRegularity: { min: 0, max: 1 },
+  // VBTI: rapid stop-start events on a 10-14s segment.
+  burstStops: { min: 0, max: 8 },
 };
 
 /** Linearly normalize `value` into [0,1] using `range`, clamping outside. */

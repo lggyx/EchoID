@@ -36,6 +36,12 @@ export interface AcousticFeatures {
   ttr: number;
   /** Average sentence length in characters. */
   sentLen: number;
+  /** VBTI: debounced F0/RMS local extrema per second. */
+  peakDensity: number;
+  /** VBTI: pause-interval regularity in [0,1]. */
+  pauseRegularity: number;
+  /** VBTI: count of rapid speech-stop-speech transitions. */
+  burstStops: number;
 }
 
 // ============ Six Dimensions ============
@@ -77,6 +83,92 @@ export interface RoleTemplate {
   themeColor: string;
 }
 
+// ============ VBTI Algorithm Contracts ============
+
+export type VbtiSubsystem = "film" | "variety" | "stage" | "robot" | "street";
+
+export interface VbtiVector {
+  /** x-axis: contrast rate in [0,100]. */
+  contrast: number;
+  /** y-axis: drama density in [0,100]. */
+  drama: number;
+  /** Speech-rate stability in [0,100]. */
+  z1: number;
+  /** Volume strength in [0,100]. */
+  z2: number;
+  /** Monologue tendency in [0,100]. */
+  z3: number;
+}
+
+export interface EvidenceItem {
+  key: string;
+  label: string;
+  value: number | string;
+  unit?: string;
+  segmentIndex?: number;
+  text: string;
+}
+
+export interface TriggeredSignal {
+  id: string;
+  label: string;
+  subsystem?: VbtiSubsystem;
+  personaId?: string;
+  bonus?: number;
+  evidence: EvidenceItem[];
+}
+
+export interface ContrastResult extends VbtiVector {
+  contrastRateAvg: number;
+  contrastRateStd: number;
+  dramaDensityAvg: number;
+  dramaDensityStd: number;
+  semanticArousal: number;
+  acousticArousal: number;
+  triggered: TriggeredSignal[];
+  evidence: EvidenceItem[];
+}
+
+export type PersonaKind = "regular" | "rare" | "fallback";
+
+export interface PersonaRule {
+  id: string;
+  label: string;
+  when: Partial<Record<keyof VbtiVector, { min?: number; max?: number }>>;
+}
+
+export interface Persona {
+  id: string;
+  subsystem: VbtiSubsystem;
+  kind: PersonaKind;
+  title: string;
+  subtitle?: string;
+  center?: VbtiVector;
+  rules?: PersonaRule[];
+  priority?: number;
+  cardCopy: string;
+  shareText?: string;
+  image: {
+    src: string;
+    themeColor: string;
+    promptTemplate?: string;
+  };
+}
+
+export type PersonaReason = "rare_rule" | "fallback_rule" | "nearest_neighbor";
+
+export interface MatchResult {
+  matchedSubsystem: VbtiSubsystem;
+  subsystemScores: Record<VbtiSubsystem, number>;
+  subsystemDistances: Record<VbtiSubsystem, number>;
+  matchedPersonaId: string;
+  persona: Persona;
+  personaReason: PersonaReason;
+  personaDistance?: number;
+  triggered: TriggeredSignal[];
+  poolPosition: { index: number; total: number };
+}
+
 // ============ Analysis Pipeline Output ============
 
 export interface AnalysisProfile {
@@ -107,8 +199,40 @@ export interface LLMProfileInput {
   transcript: string;
 }
 
+/**
+ * Input for the VBTI arousal extractor: a short segment of ASR-transcribed
+ * Chinese speech. `context` is optional metadata the LLM can use to bias its
+ * interpretation (e.g., "this was a break-down rant about a TV show").
+ */
+export interface LLMArousalInput {
+  transcript: string;
+  context?: string;
+}
+
+/**
+ * Semantic-arousal reading of a text segment. `arousal` is on a 0..1 scale
+ * where 0 = utterly flat/detached and 1 = extremely worked up. `reason` is a
+ * short human-readable justification we can surface as evidence.
+ */
+export interface ArousalResult {
+  arousal: number;
+  reason: string;
+}
+
 export interface LLMProvider {
   generateProfile(input: LLMProfileInput): Promise<AnalysisProfile>;
+  /**
+   * Extract semantic emotional arousal (激动度) from a Chinese text segment.
+   * Used by VBTI to compute the contrast between what the user *said* and how
+   * they *sounded* (voice arousal from DSP).
+   *
+   * Implementations SHOULD:
+   *  - return `arousal` clamped to [0, 1]
+   *  - never throw on transient network / schema failures — callers rely on
+   *    the pipeline continuing; wrap in try/catch and fall back to a
+   *    keyword-based estimate.
+   */
+  extractArousal(input: LLMArousalInput): Promise<ArousalResult>;
 }
 
 export interface ImageProvider {
@@ -130,4 +254,42 @@ export interface AnalyzeFullResponse extends AnalyzePartialResponse {
   dimensions: Dimension[];
   features: AcousticFeatures;
   cardCopy: string;
+}
+
+// ============ VBTI Segmented Analyze Contract ============
+
+export type StageDirection = "male" | "female" | "random";
+
+export interface AnalyzeSegmentedMeta {
+  questionCount: number;
+  stageDirection?: StageDirection;
+}
+
+export interface AnalyzeSegmentedPartialResponse {
+  recordingId: string;
+  resultId: string;
+  cardId: string;
+  headline: string;
+  imageUrl: string;
+  matchedSubsystem?: VbtiSubsystem;
+  subsystemTitle?: string;
+  roleTitle?: string;
+}
+
+export interface AnalyzeSegmentedFullResponse extends AnalyzeSegmentedPartialResponse {
+  cardCopy: string;
+  contrastRateAvg: number;
+  contrastRateStd: number;
+  dramaDensityAvg: number;
+  z1SpeedStability: number;
+  z2VolumeStrength: number;
+  z3MonologueTendency: number;
+  matchedPersonaId: string;
+  evidenceJson: unknown;
+  segmentsSummary: Array<{
+    questionIndex: number;
+    transcript: string;
+    contrastRate: number;
+    dramaDensity: number;
+  }>;
 }

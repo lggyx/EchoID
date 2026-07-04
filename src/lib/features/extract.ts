@@ -14,6 +14,7 @@ import { computeRms, HOP_SIZE } from "./rms";
 import { computePitch } from "./pitch";
 import { computeVad, type Segment } from "./vad";
 import { computeTextFeatures, windowedSpeechRates, std } from "./text";
+import { computeVbtiFrameFeatures } from "./vbti";
 
 export interface ExtractInput {
   audioPath: string;
@@ -67,6 +68,15 @@ export async function extractAcousticFeatures(input: ExtractInput): Promise<Acou
     voicedSpeechDuration > 0.05 ? totalChars / voicedSpeechDuration : totalChars / Math.max(duration, 1e-6);
   const perWindow = windowedSpeechRates(asrResult, 3);
   const speechRateVar = std(perWindow);
+  const vbti = computeVbtiFrameFeatures({
+    rms: rmsRes.rms,
+    f0: pitchRes.f0,
+    voiced: pitchRes.voiced,
+    pauses: vad.pauses,
+    speech: vad.speech,
+    duration,
+    sampleRate,
+  });
 
   return {
     duration,
@@ -84,6 +94,9 @@ export async function extractAcousticFeatures(input: ExtractInput): Promise<Acou
     fillerRate: text.fillerRate,
     ttr: text.ttr,
     sentLen: text.sentLen,
+    peakDensity: vbti.peakDensity,
+    pauseRegularity: vbti.pauseRegularity,
+    burstStops: vbti.burstStops,
   };
 }
 
