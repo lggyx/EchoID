@@ -36,6 +36,12 @@ export interface AcousticFeatures {
   ttr: number;
   /** Average sentence length in characters. */
   sentLen: number;
+  /** VBTI: debounced F0/RMS local extrema per second. */
+  peakDensity: number;
+  /** VBTI: pause-interval regularity in [0,1]. */
+  pauseRegularity: number;
+  /** VBTI: count of rapid speech-stop-speech transitions. */
+  burstStops: number;
 }
 
 // ============ Six Dimensions ============
@@ -75,6 +81,92 @@ export interface RoleTemplate {
   imagePromptTemplate: string;
   /** Primary theme color (hex). */
   themeColor: string;
+}
+
+// ============ VBTI Algorithm Contracts ============
+
+export type VbtiSubsystem = "film" | "variety" | "stage" | "robot" | "street";
+
+export interface VbtiVector {
+  /** x-axis: contrast rate in [0,100]. */
+  contrast: number;
+  /** y-axis: drama density in [0,100]. */
+  drama: number;
+  /** Speech-rate stability in [0,100]. */
+  z1: number;
+  /** Volume strength in [0,100]. */
+  z2: number;
+  /** Monologue tendency in [0,100]. */
+  z3: number;
+}
+
+export interface EvidenceItem {
+  key: string;
+  label: string;
+  value: number | string;
+  unit?: string;
+  segmentIndex?: number;
+  text: string;
+}
+
+export interface TriggeredSignal {
+  id: string;
+  label: string;
+  subsystem?: VbtiSubsystem;
+  personaId?: string;
+  bonus?: number;
+  evidence: EvidenceItem[];
+}
+
+export interface ContrastResult extends VbtiVector {
+  contrastRateAvg: number;
+  contrastRateStd: number;
+  dramaDensityAvg: number;
+  dramaDensityStd: number;
+  semanticArousal: number;
+  acousticArousal: number;
+  triggered: TriggeredSignal[];
+  evidence: EvidenceItem[];
+}
+
+export type PersonaKind = "regular" | "rare" | "fallback";
+
+export interface PersonaRule {
+  id: string;
+  label: string;
+  when: Partial<Record<keyof VbtiVector, { min?: number; max?: number }>>;
+}
+
+export interface Persona {
+  id: string;
+  subsystem: VbtiSubsystem;
+  kind: PersonaKind;
+  title: string;
+  subtitle?: string;
+  center?: VbtiVector;
+  rules?: PersonaRule[];
+  priority?: number;
+  cardCopy: string;
+  shareText?: string;
+  image: {
+    src: string;
+    themeColor: string;
+    promptTemplate?: string;
+  };
+}
+
+export type PersonaReason = "rare_rule" | "fallback_rule" | "nearest_neighbor";
+
+export interface MatchResult {
+  matchedSubsystem: VbtiSubsystem;
+  subsystemScores: Record<VbtiSubsystem, number>;
+  subsystemDistances: Record<VbtiSubsystem, number>;
+  matchedPersonaId: string;
+  persona: Persona;
+  personaReason: PersonaReason;
+  personaDistance?: number;
+  triggered: TriggeredSignal[];
+  poolPosition: { index: number; total: number };
 }
 
 // ============ Analysis Pipeline Output ============
@@ -162,4 +254,42 @@ export interface AnalyzeFullResponse extends AnalyzePartialResponse {
   dimensions: Dimension[];
   features: AcousticFeatures;
   cardCopy: string;
+}
+
+// ============ VBTI Segmented Analyze Contract ============
+
+export type StageDirection = "male" | "female" | "random";
+
+export interface AnalyzeSegmentedMeta {
+  questionCount: number;
+  stageDirection?: StageDirection;
+}
+
+export interface AnalyzeSegmentedPartialResponse {
+  recordingId: string;
+  resultId: string;
+  cardId: string;
+  headline: string;
+  imageUrl: string;
+  matchedSubsystem?: VbtiSubsystem;
+  subsystemTitle?: string;
+  roleTitle?: string;
+}
+
+export interface AnalyzeSegmentedFullResponse extends AnalyzeSegmentedPartialResponse {
+  cardCopy: string;
+  contrastRateAvg: number;
+  contrastRateStd: number;
+  dramaDensityAvg: number;
+  z1SpeedStability: number;
+  z2VolumeStrength: number;
+  z3MonologueTendency: number;
+  matchedPersonaId: string;
+  evidenceJson: unknown;
+  segmentsSummary: Array<{
+    questionIndex: number;
+    transcript: string;
+    contrastRate: number;
+    dramaDensity: number;
+  }>;
 }

@@ -65,6 +65,12 @@ async function main(): Promise<void> {
   assert(feats.f0Mean > 200 && feats.f0Mean < 240, `f0Mean in (200,240) (got ${feats.f0Mean.toFixed(2)})`);
   assert(feats.rmsMean > 0, `rmsMean > 0 (got ${feats.rmsMean.toFixed(4)})`);
   assert(feats.pauseRatio < 0.05, `pauseRatio < 0.05 (got ${feats.pauseRatio.toFixed(4)})`);
+  assert(Number.isFinite((feats as any).peakDensity), `peakDensity is finite (got ${(feats as any).peakDensity})`);
+  assert(
+    (feats as any).pauseRegularity >= 0 && (feats as any).pauseRegularity <= 1,
+    `pauseRegularity in [0,1] (got ${(feats as any).pauseRegularity})`,
+  );
+  assert(Number.isFinite((feats as any).burstStops), `burstStops is finite (got ${(feats as any).burstStops})`);
 
   console.log(process.exitCode ? "SMOKE: FAIL" : "SMOKE: OK");
 }
