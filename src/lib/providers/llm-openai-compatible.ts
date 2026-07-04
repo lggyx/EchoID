@@ -50,15 +50,6 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly timeoutMs: number;
-  /**
-   * Delegate for `generateProfile` until the VBTI AnalysisProfile schema
-   * is nailed down. The VBTI card copy needs `headline / card_copy /
-   * evidence / persona_id / image_prompt`, which differs from the legacy
-   * EchoID `matched_role_id + dimensions[]` shape currently in
-   * `types/core.ts`. Until tracks A/B agree on the new type
-   * (PRD §12.4), we route the legacy shape through the mock so the whole
-   * pipeline stays green — swap this out when the VBTI schema lands.
-   */
   private readonly legacyProfileDelegate = new MockLLMProvider();
 
   constructor(opts: OpenAICompatibleOptions) {
@@ -92,17 +83,36 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
   }
 
   async generateProfile(input: LLMProfileInput): Promise<AnalysisProfile> {
-    // Legacy EchoID shape. Delegated to the mock until the VBTI
-    // AnalysisProfile schema is committed in types/core.ts by tracks A/B.
-    // The delegate is fully deterministic so the pipeline is stable during
-    // the transition; the real LLM will only start driving profiles once
-    // the new schema (headline / card_copy / evidence / persona_id) lands.
+    // Legacy EchoID profile shape. VBTI uses the segmented pipeline and does
+    // not need this method for matching/card copy, so keep the legacy path
+    // stable by delegating to the deterministic mock until a VBTI profile
+    // schema replaces the old RoleTemplate/Dimension contract.
     return this.legacyProfileDelegate.generateProfile(input);
   }
 
   // ---------- internals ----------
 
   private async chat(
+    messages: ChatMessage[],
+    opts: { maxTokens: number; temperature?: number },
+  ): Promise<string> {
+    // Some providers (openai-next / gpt-5-chat under contention) will
+    // occasionally return `finish=length` with empty content when the
+    // effective max_tokens is tight — this doubled request usually clears
+    // it. Phase 0 spike hit this on 1/24 calls; without the retry, the
+    // fallback path masked it and inflated per-clip variance.
+    try {
+      return await this.chatOnce(messages, opts);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (/finish=length/.test(msg) || /empty content/.test(msg)) {
+        return this.chatOnce(messages, { ...opts, maxTokens: opts.maxTokens * 4 });
+      }
+      throw err;
+    }
+  }
+
+  private async chatOnce(
     messages: ChatMessage[],
     opts: { maxTokens: number; temperature?: number },
   ): Promise<string> {

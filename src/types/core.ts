@@ -36,6 +36,12 @@ export interface AcousticFeatures {
   ttr: number;
   /** Average sentence length in characters. */
   sentLen: number;
+  /** VBTI: debounced F0/RMS local extrema per second. */
+  peakDensity: number;
+  /** VBTI: pause-interval regularity in [0,1]. */
+  pauseRegularity: number;
+  /** VBTI: count of rapid speech-stop-speech transitions. */
+  burstStops: number;
 }
 
 // ============ Six Dimensions ============
@@ -75,6 +81,92 @@ export interface RoleTemplate {
   imagePromptTemplate: string;
   /** Primary theme color (hex). */
   themeColor: string;
+}
+
+// ============ VBTI Algorithm Contracts ============
+
+export type VbtiSubsystem = "film" | "variety" | "stage" | "robot" | "street";
+
+export interface VbtiVector {
+  /** x-axis: contrast rate in [0,100]. */
+  contrast: number;
+  /** y-axis: drama density in [0,100]. */
+  drama: number;
+  /** Speech-rate stability in [0,100]. */
+  z1: number;
+  /** Volume strength in [0,100]. */
+  z2: number;
+  /** Monologue tendency in [0,100]. */
+  z3: number;
+}
+
+export interface EvidenceItem {
+  key: string;
+  label: string;
+  value: number | string;
+  unit?: string;
+  segmentIndex?: number;
+  text: string;
+}
+
+export interface TriggeredSignal {
+  id: string;
+  label: string;
+  subsystem?: VbtiSubsystem;
+  personaId?: string;
+  bonus?: number;
+  evidence: EvidenceItem[];
+}
+
+export interface ContrastResult extends VbtiVector {
+  contrastRateAvg: number;
+  contrastRateStd: number;
+  dramaDensityAvg: number;
+  dramaDensityStd: number;
+  semanticArousal: number;
+  acousticArousal: number;
+  triggered: TriggeredSignal[];
+  evidence: EvidenceItem[];
+}
+
+export type PersonaKind = "regular" | "rare" | "fallback";
+
+export interface PersonaRule {
+  id: string;
+  label: string;
+  when: Partial<Record<keyof VbtiVector, { min?: number; max?: number }>>;
+}
+
+export interface Persona {
+  id: string;
+  subsystem: VbtiSubsystem;
+  kind: PersonaKind;
+  title: string;
+  subtitle?: string;
+  center?: VbtiVector;
+  rules?: PersonaRule[];
+  priority?: number;
+  cardCopy: string;
+  shareText?: string;
+  image: {
+    src: string;
+    themeColor: string;
+    promptTemplate?: string;
+  };
+}
+
+export type PersonaReason = "rare_rule" | "fallback_rule" | "nearest_neighbor";
+
+export interface MatchResult {
+  matchedSubsystem: VbtiSubsystem;
+  subsystemScores: Record<VbtiSubsystem, number>;
+  subsystemDistances: Record<VbtiSubsystem, number>;
+  matchedPersonaId: string;
+  persona: Persona;
+  personaReason: PersonaReason;
+  personaDistance?: number;
+  triggered: TriggeredSignal[];
+  poolPosition: { index: number; total: number };
 }
 
 // ============ Analysis Pipeline Output ============
@@ -164,53 +256,40 @@ export interface AnalyzeFullResponse extends AnalyzePartialResponse {
   cardCopy: string;
 }
 
-// ============ VBTI Segmented Analyze Contract (PRD §12.4) ============
+// ============ VBTI Segmented Analyze Contract ============
 
-/**
- * The 5th question in VBTI lets the user pick who they're playing —
- * "male-lead" line-set, "female-lead" line-set, or randomized mix. The
- * frontend passes this string through on submit so the persistence layer
- * can round-trip it into `Recording.stageDirection`.
- */
 export type StageDirection = "male" | "female" | "random";
 
-/**
- * Metadata block that accompanies the multipart array upload.
- *
- * Wire format: a single form field named `meta` whose value is JSON.
- * The audio files themselves are appended as repeated `audio` fields,
- * one per question (5 for the full VBTI flow).
- *
- * Example client usage:
- *   const fd = new FormData();
- *   fd.append("meta", JSON.stringify({ stageDirection: "male", questionCount: 5 }));
- *   for (const blob of blobs) fd.append("audio", blob, `q${i}.webm`);
- */
 export interface AnalyzeSegmentedMeta {
-  /** Should match the number of `audio` fields appended. Sanity-check only. */
   questionCount: number;
-  /** Chosen戏路 for question 5. Absent on non-VBTI submissions. */
   stageDirection?: StageDirection;
 }
 
-/**
- * Partial reveal payload returned right after upload. VBTI adds the
- * matched subsystem name (影视/综艺/舞台/机器人/街头) as the first-stage
- * suspense hook — persona is only revealed after unlock.
- *
- * Legacy EchoID responses populate `roleTitle`/`headline` and leave the
- * VBTI-only fields undefined; VBTI responses populate all of them.
- */
 export interface AnalyzeSegmentedPartialResponse {
   recordingId: string;
   resultId: string;
   cardId: string;
   headline: string;
   imageUrl: string;
-  /** VBTI: matched subsystem, e.g. "variety". */
-  matchedSubsystem?: string;
-  /** VBTI: subsystem's human-readable label, e.g. "综艺组". */
+  matchedSubsystem?: VbtiSubsystem;
   subsystemTitle?: string;
-  /** Legacy EchoID compatibility. */
   roleTitle?: string;
+}
+
+export interface AnalyzeSegmentedFullResponse extends AnalyzeSegmentedPartialResponse {
+  cardCopy: string;
+  contrastRateAvg: number;
+  contrastRateStd: number;
+  dramaDensityAvg: number;
+  z1SpeedStability: number;
+  z2VolumeStrength: number;
+  z3MonologueTendency: number;
+  matchedPersonaId: string;
+  evidenceJson: unknown;
+  segmentsSummary: Array<{
+    questionIndex: number;
+    transcript: string;
+    contrastRate: number;
+    dramaDensity: number;
+  }>;
 }

@@ -14,6 +14,7 @@ import type {
   AnalyzeSegmentedMeta,
   AnalyzeSegmentedPartialResponse,
   Dimension,
+  VbtiSubsystem,
 } from "@/types/core";
 
 import { prisma } from "@/lib/prisma";
@@ -244,8 +245,12 @@ async function respondSegmented(
   result: ResultWithRelations,
   full: boolean,
 ): Promise<NextResponse> {
-  const matchedSubsystem = result.matchedSubsystem ?? "";
-  const subsystemTitle = SUBSYSTEM_TITLE[matchedSubsystem] ?? matchedSubsystem;
+  const matchedSubsystem = (result.matchedSubsystem ?? undefined) as
+    | VbtiSubsystem
+    | undefined;
+  const subsystemTitle = matchedSubsystem
+    ? SUBSYSTEM_TITLE[matchedSubsystem] ?? matchedSubsystem
+    : (result.matchedSubsystem ?? "");
   const card = result.card!;
 
   const partial: AnalyzeSegmentedPartialResponse = {

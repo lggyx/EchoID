@@ -58,9 +58,16 @@ async function main(): Promise<void> {
   if (!res) throw new Error("AnalysisResult row missing after pipeline");
   if (!card) throw new Error("Card row missing after pipeline");
 
-  // 2) Image file written under storage/images/
-  const imgRel = out.result.imageUrl.replace(/^\/storage\//, "");
-  const imgAbs = path.join(storageDir, imgRel);
+  // 2) Image file exists. Static provider returns /personas/... from public/,
+  // while mock provider writes /storage/images/... or /api/storage/images/...
+  const imgAbs = out.result.imageUrl.startsWith("/personas/")
+    ? path.join(process.cwd(), "public", out.result.imageUrl.replace(/^\//, ""))
+    : path.join(
+        storageDir,
+        out.result.imageUrl
+          .replace(/^\/api\/storage\//, "")
+          .replace(/^\/storage\//, ""),
+      );
   const imgStat = await fs.stat(imgAbs);
   if (!imgStat.isFile() || imgStat.size <= 0) {
     throw new Error(`Image not written or empty: ${imgAbs}`);
@@ -71,8 +78,11 @@ async function main(): Promise<void> {
   if (card.imageUrl !== res.imageUrl) throw new Error("Card.imageUrl mismatch");
 
   // 4) Full payload.
-  const features = JSON.parse(res.featuresJson ?? "{}");
-  const dimensions = JSON.parse(res.dimensionsJson ?? "[]");
+  if (!res.featuresJson || !res.dimensionsJson) {
+    throw new Error("Legacy pipeline did not persist featuresJson/dimensionsJson");
+  }
+  const features = JSON.parse(res.featuresJson);
+  const dimensions = JSON.parse(res.dimensionsJson);
 
   const payload = {
     recordingId: rec.id,
