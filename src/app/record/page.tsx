@@ -692,6 +692,39 @@ function BriefPanel({
             </p>
           </div>
         </div>
+
+        {/* How-to hints — 2-3 short lines so users know what "good" looks like. */}
+        {scenario.hints.length > 0 && (
+          <div className="mt-4">
+            <div className="mb-2 flex items-center gap-2">
+              <span
+                className="h-[1px] w-4"
+                style={{ background: "#B8905A" }}
+                aria-hidden
+              />
+              <span className="font-mono text-[10px] tracking-[0.2em] text-inkText/60 uppercase">
+                怎么答 · TIPS
+              </span>
+              <span
+                className="h-[1px] flex-1"
+                style={{ background: "#B8905A", opacity: 0.4 }}
+                aria-hidden
+              />
+            </div>
+            <ul className="space-y-1.5 text-[13px] leading-relaxed text-inkText/75">
+              {scenario.hints.map((h, i) => (
+                <li key={i} className="flex gap-2">
+                  <span
+                    className="mt-[7px] inline-block h-[6px] w-[6px] shrink-0 rotate-45"
+                    style={{ background: "#C44B2F" }}
+                    aria-hidden
+                  />
+                  <span>{h}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </AgedCard>
 
       <RustButton onClick={onStart} className="w-full text-[16px]">
@@ -790,6 +823,27 @@ function StageChoicePanel({
               </li>
             ))}
           </ol>
+
+          {/* Stage-specific tips — only shown once a戏路 is picked. */}
+          {(scenario.stageHints ?? []).length > 0 && (
+            <div className="mt-5 border-t border-dashed border-copperDim/40 pt-3">
+              <div className="mb-2 font-mono text-[10px] tracking-[0.2em] text-inkText/60 uppercase">
+                怎么演 · TIPS
+              </div>
+              <ul className="space-y-1.5 text-[13px] leading-relaxed text-inkText/75">
+                {(scenario.stageHints ?? []).map((h, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span
+                      className="mt-[7px] inline-block h-[6px] w-[6px] shrink-0 rotate-45"
+                      style={{ background: "#C44B2F" }}
+                      aria-hidden
+                    />
+                    <span>{h}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </AgedCard>
       )}
 
