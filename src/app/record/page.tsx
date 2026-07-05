@@ -897,6 +897,42 @@ function RecordingPanel({
               <ExhibitTag label={`REC · Nº ${scenario.caseId}`} />
             </div>
 
+            {/* Q5-specific inline 剧本 · lets the user read the 3-act lines
+                while recording without leaving the panel. */}
+            {scenario.hasStageDirection && (scenario.actLines?.length ?? 0) > 0 && (
+              <div className="mb-3 rounded-sharp border border-copper/40 bg-cardDarker/60 px-3 py-2.5">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-copper">
+                    剧本 · 边看边念
+                  </span>
+                  <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-copperDim">
+                    3 幕 · 每幕换语气
+                  </span>
+                </div>
+                <ol className="space-y-2">
+                  {scenario.actLines!.map((l, i) => (
+                    <li key={i} className="flex gap-2.5">
+                      <span
+                        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sharp font-mono text-[10px] font-bold"
+                        style={{ background: "#C44B2F", color: "#F5F0E8" }}
+                        aria-hidden
+                      >
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-copperDim">
+                          {l.role} · {l.tone}
+                        </div>
+                        <div className="mt-0.5 font-heading text-[14px] font-bold text-paper leading-snug">
+                          「{l.text}」
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
             <div className="mt-2 grid grid-cols-[auto_1fr] gap-4 items-center">
               {/* Big circular record button + progress ring. */}
               <div className="relative h-32 w-32">
